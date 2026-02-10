@@ -1,0 +1,563 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		8276734A2F3BBF0A00BCECAF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 827673342F3BBF0800BCECAF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8276733B2F3BBF0800BCECAF;
+			remoteInfo = "Grind N Chill";
+		};
+		827673542F3BBF0A00BCECAF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 827673342F3BBF0800BCECAF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8276733B2F3BBF0800BCECAF;
+			remoteInfo = "Grind N Chill";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		8276733C2F3BBF0800BCECAF /* Grind N Chill.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Grind N Chill.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		827673492F3BBF0A00BCECAF /* Grind N ChillTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Grind N ChillTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		827673532F3BBF0A00BCECAF /* Grind N ChillUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Grind N ChillUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		8276733E2F3BBF0800BCECAF /* Grind N Chill */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Grind N Chill";
+			sourceTree = "<group>";
+		};
+		8276734C2F3BBF0A00BCECAF /* Grind N ChillTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Grind N ChillTests";
+			sourceTree = "<group>";
+		};
+		827673562F3BBF0A00BCECAF /* Grind N ChillUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Grind N ChillUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		827673392F3BBF0800BCECAF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		827673462F3BBF0A00BCECAF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		827673502F3BBF0A00BCECAF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		827673332F3BBF0800BCECAF = {
+			isa = PBXGroup;
+			children = (
+				8276733E2F3BBF0800BCECAF /* Grind N Chill */,
+				8276734C2F3BBF0A00BCECAF /* Grind N ChillTests */,
+				827673562F3BBF0A00BCECAF /* Grind N ChillUITests */,
+				8276733D2F3BBF0800BCECAF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8276733D2F3BBF0800BCECAF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8276733C2F3BBF0800BCECAF /* Grind N Chill.app */,
+				827673492F3BBF0A00BCECAF /* Grind N ChillTests.xctest */,
+				827673532F3BBF0A00BCECAF /* Grind N ChillUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8276733B2F3BBF0800BCECAF /* Grind N Chill */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8276735D2F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N Chill" */;
+			buildPhases = (
+				827673382F3BBF0800BCECAF /* Sources */,
+				827673392F3BBF0800BCECAF /* Frameworks */,
+				8276733A2F3BBF0800BCECAF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8276733E2F3BBF0800BCECAF /* Grind N Chill */,
+			);
+			name = "Grind N Chill";
+			packageProductDependencies = (
+			);
+			productName = "Grind N Chill";
+			productReference = 8276733C2F3BBF0800BCECAF /* Grind N Chill.app */;
+			productType = "com.apple.product-type.application";
+		};
+		827673482F3BBF0A00BCECAF /* Grind N ChillTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 827673602F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N ChillTests" */;
+			buildPhases = (
+				827673452F3BBF0A00BCECAF /* Sources */,
+				827673462F3BBF0A00BCECAF /* Frameworks */,
+				827673472F3BBF0A00BCECAF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8276734B2F3BBF0A00BCECAF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8276734C2F3BBF0A00BCECAF /* Grind N ChillTests */,
+			);
+			name = "Grind N ChillTests";
+			packageProductDependencies = (
+			);
+			productName = "Grind N ChillTests";
+			productReference = 827673492F3BBF0A00BCECAF /* Grind N ChillTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		827673522F3BBF0A00BCECAF /* Grind N ChillUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 827673632F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N ChillUITests" */;
+			buildPhases = (
+				8276734F2F3BBF0A00BCECAF /* Sources */,
+				827673502F3BBF0A00BCECAF /* Frameworks */,
+				827673512F3BBF0A00BCECAF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				827673552F3BBF0A00BCECAF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				827673562F3BBF0A00BCECAF /* Grind N ChillUITests */,
+			);
+			name = "Grind N ChillUITests";
+			packageProductDependencies = (
+			);
+			productName = "Grind N ChillUITests";
+			productReference = 827673532F3BBF0A00BCECAF /* Grind N ChillUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		827673342F3BBF0800BCECAF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					8276733B2F3BBF0800BCECAF = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					827673482F3BBF0A00BCECAF = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 8276733B2F3BBF0800BCECAF;
+					};
+					827673522F3BBF0A00BCECAF = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 8276733B2F3BBF0800BCECAF;
+					};
+				};
+			};
+			buildConfigurationList = 827673372F3BBF0800BCECAF /* Build configuration list for PBXProject "Grind N Chill" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 827673332F3BBF0800BCECAF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 8276733D2F3BBF0800BCECAF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8276733B2F3BBF0800BCECAF /* Grind N Chill */,
+				827673482F3BBF0A00BCECAF /* Grind N ChillTests */,
+				827673522F3BBF0A00BCECAF /* Grind N ChillUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8276733A2F3BBF0800BCECAF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		827673472F3BBF0A00BCECAF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		827673512F3BBF0A00BCECAF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		827673382F3BBF0800BCECAF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		827673452F3BBF0A00BCECAF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8276734F2F3BBF0A00BCECAF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8276734B2F3BBF0A00BCECAF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8276733B2F3BBF0800BCECAF /* Grind N Chill */;
+			targetProxy = 8276734A2F3BBF0A00BCECAF /* PBXContainerItemProxy */;
+		};
+		827673552F3BBF0A00BCECAF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8276733B2F3BBF0800BCECAF /* Grind N Chill */;
+			targetProxy = 827673542F3BBF0A00BCECAF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		8276735B2F3BBF0A00BCECAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8276735C2F3BBF0A00BCECAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = W567MVT87B;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		8276735E2F3BBF0A00BCECAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-Chill";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8276735F2F3BBF0A00BCECAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-Chill";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		827673612F3BBF0A00BCECAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-ChillTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Grind N Chill.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Grind N Chill";
+			};
+			name = Debug;
+		};
+		827673622F3BBF0A00BCECAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-ChillTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Grind N Chill.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Grind N Chill";
+			};
+			name = Release;
+		};
+		827673642F3BBF0A00BCECAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-ChillUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Grind N Chill";
+			};
+			name = Debug;
+		};
+		827673652F3BBF0A00BCECAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W567MVT87B;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Sage-Software.Grind-N-ChillUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Grind N Chill";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		827673372F3BBF0800BCECAF /* Build configuration list for PBXProject "Grind N Chill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8276735B2F3BBF0A00BCECAF /* Debug */,
+				8276735C2F3BBF0A00BCECAF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8276735D2F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N Chill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8276735E2F3BBF0A00BCECAF /* Debug */,
+				8276735F2F3BBF0A00BCECAF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		827673602F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N ChillTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				827673612F3BBF0A00BCECAF /* Debug */,
+				827673622F3BBF0A00BCECAF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		827673632F3BBF0A00BCECAF /* Build configuration list for PBXNativeTarget "Grind N ChillUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				827673642F3BBF0A00BCECAF /* Debug */,
+				827673652F3BBF0A00BCECAF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 827673342F3BBF0800BCECAF /* Project object */;
+}
