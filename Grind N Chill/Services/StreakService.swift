@@ -4,7 +4,9 @@ struct StreakService {
     func streak(for category: Category, entries: [Entry], now: Date = .now, calendar: Calendar = .current) -> Int {
         guard category.resolvedStreakEnabled else { return 0 }
 
-        let categoryEntries = entries.filter { $0.category.id == category.id }
+        let categoryEntries = entries.filter { entry in
+            entry.category?.id == category.id
+        }
 
         switch category.resolvedType {
         case .goodHabit:
@@ -30,7 +32,7 @@ struct StreakService {
 
         return entries
             .filter {
-                $0.category.id == category.id &&
+                $0.category?.id == category.id &&
                 calendar.isDate($0.timestamp, inSameDayAs: targetDay)
             }
             .reduce(.zeroValue) { partialResult, entry in

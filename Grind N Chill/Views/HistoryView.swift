@@ -145,12 +145,16 @@ struct HistoryView: View {
     }
 
     private func entryRow(_ entry: Entry) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let symbolName = entry.category?.resolvedSymbolName ?? "tray"
+        let iconColor = entry.category?.resolvedIconColor.swiftUIColor ?? Color.secondary
+        let title = entry.category?.title ?? "Unknown Category"
+
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 HStack(spacing: 6) {
-                    Image(systemName: entry.category.resolvedSymbolName)
-                        .foregroundStyle(entry.category.resolvedIconColor.swiftUIColor)
-                    Text(entry.category.title)
+                    Image(systemName: symbolName)
+                        .foregroundStyle(iconColor)
+                    Text(title)
                 }
                 .font(.headline)
                 Spacer()

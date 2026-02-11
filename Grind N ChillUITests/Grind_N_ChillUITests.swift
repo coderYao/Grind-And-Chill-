@@ -256,6 +256,7 @@ final class Grind_N_ChillUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = [
             "-ui-testing-reset-store",
+            "-ui-testing-disable-cloudkit",
             "-ui-testing-disable-animations",
             "-settings.hasCompletedOnboarding",
             "YES",

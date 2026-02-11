@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class Category {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var title: String = ""
     var multiplier: Double = 1.0
     var type: CategoryType? = CategoryType.goodHabit
@@ -20,7 +20,7 @@ final class Category {
     var streakBonusSchedule: String?
     var symbolName: String?
     var iconColor: CategoryIconColor?
-    @Relationship(deleteRule: .cascade) var entries: [Entry]
+    @Relationship(deleteRule: .cascade, inverse: \Entry.category) var entries: [Entry]?
 
     init(
         id: UUID = UUID(),

@@ -92,7 +92,7 @@ final class DashboardViewModel {
         var buckets: [UUID: Bucket] = [:]
 
         for entry in todayEntries {
-            let category = entry.category
+            guard let category = entry.category else { continue }
             let categoryID = category.id
             let quantity = activityQuantity(for: entry, category: category)
 

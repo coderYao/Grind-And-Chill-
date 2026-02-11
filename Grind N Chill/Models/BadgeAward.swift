@@ -3,10 +3,10 @@ import SwiftData
 
 @Model
 final class BadgeAward {
-    @Attribute(.unique) var awardKey: String
-    var dateAwarded: Date
+    var awardKey: String = ""
+    var dateAwarded: Date = Date.now
 
-    init(awardKey: String, dateAwarded: Date = .now) {
+    init(awardKey: String, dateAwarded: Date = Date.now) {
         self.awardKey = awardKey
         self.dateAwarded = dateAwarded
     }

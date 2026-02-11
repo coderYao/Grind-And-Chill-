@@ -3,23 +3,23 @@ import SwiftData
 
 @Model
 final class Entry {
-    @Attribute(.unique) var id: UUID
-    var timestamp: Date
-    var durationMinutes: Int
-    var amountUSD: Decimal
+    var id: UUID = UUID()
+    var timestamp: Date = Date.now
+    var durationMinutes: Int = 0
+    var amountUSD: Decimal = Decimal.zero
     var quantity: Decimal?
     var unit: CategoryUnit?
-    var note: String
+    var note: String = ""
     var bonusKey: String?
-    var isManual: Bool
-    var category: Category
+    var isManual: Bool = false
+    var category: Category?
 
     init(
         id: UUID = UUID(),
-        timestamp: Date = .now,
+        timestamp: Date = Date.now,
         durationMinutes: Int,
         amountUSD: Decimal,
-        category: Category,
+        category: Category?,
         note: String = "",
         bonusKey: String? = nil,
         isManual: Bool,
@@ -47,7 +47,11 @@ final class Entry {
             return .time
         }
 
-        return category.resolvedUnit
+        if let category {
+            return category.resolvedUnit
+        }
+
+        return .money
     }
 
     var resolvedQuantity: Decimal {
