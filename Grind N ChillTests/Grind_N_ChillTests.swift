@@ -455,6 +455,7 @@ struct Grind_N_ChillTests {
         viewModel.title = "Writing"
         viewModel.multiplier = 1.25
         viewModel.type = .goodHabit
+        viewModel.iconColor = .teal
         viewModel.dailyGoalMinutes = 75
 
         let created = viewModel.saveCategory(in: modelContext, existingCategories: [])
@@ -474,6 +475,7 @@ struct Grind_N_ChillTests {
         viewModel.beginEditing(savedCategory)
         viewModel.title = "Writing Sprint"
         viewModel.multiplier = 1.4
+        viewModel.iconColor = .pink
         viewModel.dailyGoalMinutes = 90
 
         let updated = viewModel.saveCategory(
@@ -489,6 +491,7 @@ struct Grind_N_ChillTests {
         #expect(categoriesAfterEdit.first?.title == "Writing Sprint")
         #expect(categoriesAfterEdit.first?.multiplier == 1.4)
         #expect(categoriesAfterEdit.first?.dailyGoalMinutes == 90)
+        #expect(categoriesAfterEdit.first?.iconColor == .pink)
     }
 
     @Test

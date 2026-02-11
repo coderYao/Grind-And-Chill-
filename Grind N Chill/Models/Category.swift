@@ -13,6 +13,7 @@ final class Category {
     var usdPerCount: Double?
     var dailyGoalMinutes: Int = 0
     var symbolName: String?
+    var iconColor: CategoryIconColor?
     @Relationship(deleteRule: .cascade) var entries: [Entry]
 
     init(
@@ -22,6 +23,7 @@ final class Category {
         type: CategoryType,
         dailyGoalMinutes: Int,
         symbolName: String? = nil,
+        iconColor: CategoryIconColor? = nil,
         unit: CategoryUnit = .time,
         timeConversionMode: TimeConversionMode = .multiplier,
         hourlyRateUSD: Double? = nil,
@@ -37,6 +39,7 @@ final class Category {
         self.usdPerCount = usdPerCount
         self.dailyGoalMinutes = dailyGoalMinutes
         self.symbolName = symbolName
+        self.iconColor = iconColor
         self.entries = []
     }
 
@@ -64,5 +67,9 @@ final class Category {
 
     var resolvedSymbolName: String {
         symbolName ?? resolvedType.symbolName
+    }
+
+    var resolvedIconColor: CategoryIconColor {
+        iconColor ?? CategoryIconColor.defaultColor(for: resolvedType)
     }
 }

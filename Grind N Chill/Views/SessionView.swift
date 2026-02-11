@@ -55,7 +55,11 @@ struct SessionView: View {
 
                 Picker("Track", selection: $bindableViewModel.selectedCategoryID) {
                     ForEach(categories) { category in
-                        Label(category.title, systemImage: category.resolvedSymbolName)
+                        HStack(spacing: 8) {
+                            Image(systemName: category.resolvedSymbolName)
+                                .foregroundStyle(category.resolvedIconColor.swiftUIColor)
+                            Text(category.title)
+                        }
                             .tag(Optional(category.id))
                     }
                 }

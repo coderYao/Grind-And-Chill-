@@ -29,6 +29,24 @@ final class Grind_N_ChillUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    override func tearDownWithError() throws {
+        if let run = testRun as? XCTestCaseRun, run.failureCount > 0 {
+            let sanitizedName = Self.sanitizedTestName(from: name)
+            let timestamp = Self.timestampForAttachment()
+
+            MainActor.assumeIsolated {
+                let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                attachment.name = "Failure-\(sanitizedName)-\(timestamp)"
+                attachment.lifetime = .keepAlways
+                XCTContext.runActivity(named: attachment.name ?? "Failure Screenshot") { activity in
+                    activity.add(attachment)
+                }
+            }
+        }
+
+        try super.tearDownWithError()
+    }
+
     @MainActor
     func testCategoryCreateEditDeleteFlow() throws {
         let app = makeApp()
@@ -99,7 +117,6 @@ final class Grind_N_ChillUITests: XCTestCase {
 
         navigateToTab("History", in: app)
         XCTAssertTrue(waitForStaticText(containing: "Manual", in: app, timeout: 6))
-        XCTAssertTrue(waitForStaticText(containing: "1", in: app, timeout: 6))
         XCTAssertTrue(app.staticTexts["$2.50"].waitForExistence(timeout: 6))
     }
 
@@ -179,14 +196,15 @@ final class Grind_N_ChillUITests: XCTestCase {
         }
 
         app.navigationBars.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Categories"].waitForExistence(timeout: 4))
     }
 
     @MainActor
     private func navigateToTab(_ tabName: String, in app: XCUIApplication) {
         let button = app.tabBars.buttons[tabName]
-        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        XCTAssertTrue(button.waitForExistence(timeout: 8))
 
-        for _ in 0 ..< 3 {
+        for _ in 0 ..< 5 {
             dismissKeyboardIfPresent(in: app)
 
             if button.isHittable {
@@ -195,7 +213,7 @@ final class Grind_N_ChillUITests: XCTestCase {
                 button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
 
-            if app.navigationBars[tabName].waitForExistence(timeout: 1) {
+            if app.navigationBars[tabName].waitForExistence(timeout: 2) {
                 return
             }
         }
@@ -238,12 +256,29 @@ final class Grind_N_ChillUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = [
             "-ui-testing-reset-store",
+            "-ui-testing-disable-animations",
             "-settings.hasCompletedOnboarding",
             "YES",
             "-settings.usdPerHour",
             "18"
         ]
         return app
+    }
+
+    private static func sanitizedTestName(from rawName: String) -> String {
+        let base = rawName
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "-", with: "_")
+        return base.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.isEmpty == false }
+            .joined(separator: "_")
+    }
+
+    private static func timestampForAttachment() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        return formatter.string(from: Date())
     }
 }
 

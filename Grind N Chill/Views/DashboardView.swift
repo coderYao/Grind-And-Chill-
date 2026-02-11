@@ -90,7 +90,7 @@ struct DashboardView: View {
 
                             HStack {
                                 Image(systemName: category.resolvedSymbolName)
-                                    .foregroundStyle(category.resolvedType == .goodHabit ? .green : .orange)
+                                    .foregroundStyle(category.resolvedIconColor.swiftUIColor)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(category.title)

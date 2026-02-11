@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @main
 struct Grind_N_ChillApp: App {
@@ -7,6 +10,12 @@ struct Grind_N_ChillApp: App {
     private let sharedContainer = ModelContainerFactory.makeSharedContainer()
     
     init() {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-disable-animations") {
+            UIView.setAnimationsEnabled(false)
+        }
+#endif
+
         do {
             _ = try LegacyDataRepairService.repairCategoriesIfNeeded(in: sharedContainer.mainContext)
         } catch {

@@ -37,7 +37,7 @@ struct CategoryListView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: category.resolvedSymbolName)
-                                .foregroundStyle(category.resolvedType == .goodHabit ? .green : .orange)
+                                .foregroundStyle(category.resolvedIconColor.swiftUIColor)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(category.title)
@@ -119,14 +119,72 @@ private struct CategoryEditorSheet: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("categoryEditor.unit")
+                }
 
-                    Picker("Icon", selection: $viewModel.symbolName) {
+                Section("Icon") {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                        spacing: 10
+                    ) {
                         ForEach(viewModel.symbolOptions(), id: \.self) { symbol in
-                            Label(symbol, systemImage: symbol)
-                                .tag(symbol)
+                            Button {
+                                viewModel.symbolName = symbol
+                            } label: {
+                                Image(systemName: symbol)
+                                    .font(.title3)
+                                    .foregroundStyle(viewModel.iconColor.swiftUIColor)
+                                    .frame(maxWidth: .infinity, minHeight: 36)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color(.secondarySystemBackground))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(
+                                                viewModel.symbolName == symbol ? viewModel.iconColor.swiftUIColor : Color.clear,
+                                                lineWidth: 2
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(symbol)
                         }
                     }
-                    .accessibilityIdentifier("categoryEditor.icon")
+                    .accessibilityIdentifier("categoryEditor.iconGrid")
+                }
+
+                Section("Icon Color") {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                        spacing: 10
+                    ) {
+                        ForEach(CategoryIconColor.allCases) { color in
+                            Button {
+                                viewModel.iconColor = color
+                            } label: {
+                                Circle()
+                                    .fill(color.swiftUIColor)
+                                    .frame(width: 28, height: 28)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color(.systemBackground), lineWidth: 2)
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                viewModel.iconColor == color ? Color.primary : Color.clear,
+                                                lineWidth: 2
+                                            )
+                                            .padding(-3)
+                                    )
+                                    .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(color.rawValue.capitalized)
+                        }
+                    }
+                    .accessibilityIdentifier("categoryEditor.iconColorGrid")
                 }
 
                 Section("Ledger Conversion") {

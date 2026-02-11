@@ -19,6 +19,9 @@ final class CategoriesViewModel {
     var type: CategoryType = .goodHabit {
         didSet {
             symbolName = CategorySymbolCatalog.normalizedSymbol(symbolName, for: type)
+            if iconColor == CategoryIconColor.defaultColor(for: oldValue) {
+                iconColor = CategoryIconColor.defaultColor(for: type)
+            }
         }
     }
     var unit: CategoryUnit = .time
@@ -26,6 +29,7 @@ final class CategoriesViewModel {
     var hourlyRateUSD: Double = 18
     var usdPerCount: Double = 1
     var symbolName: String = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
+    var iconColor: CategoryIconColor = .green
     var dailyGoalMinutes: Int = 30
 
     var latestError: String?
@@ -60,6 +64,7 @@ final class CategoriesViewModel {
         hourlyRateUSD = category.hourlyRateUSD ?? 18
         usdPerCount = category.usdPerCount ?? 1
         symbolName = CategorySymbolCatalog.normalizedSymbol(category.resolvedSymbolName, for: category.resolvedType)
+        iconColor = category.resolvedIconColor
         dailyGoalMinutes = category.dailyGoalMinutes
         latestError = nil
         latestStatus = nil
@@ -116,6 +121,7 @@ final class CategoriesViewModel {
             category.usdPerCount = unit == .count ? usdPerCount : nil
             category.dailyGoalMinutes = dailyGoalMinutes
             category.symbolName = normalizedSymbol
+            category.iconColor = iconColor
         } else {
             let category = Category(
                 title: normalizedTitle,
@@ -123,6 +129,7 @@ final class CategoriesViewModel {
                 type: type,
                 dailyGoalMinutes: dailyGoalMinutes,
                 symbolName: normalizedSymbol,
+                iconColor: iconColor,
                 unit: unit,
                 timeConversionMode: timeConversionMode,
                 hourlyRateUSD: (unit == .time && timeConversionMode == .hourlyRate) ? hourlyRateUSD : nil,
@@ -203,6 +210,7 @@ final class CategoriesViewModel {
         hourlyRateUSD = 18
         usdPerCount = 1
         symbolName = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
+        iconColor = CategoryIconColor.defaultColor(for: type)
         dailyGoalMinutes = 30
     }
 

@@ -35,8 +35,12 @@ struct HistoryView: View {
                     ForEach(filtered) { entry in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Label(entry.category.title, systemImage: entry.category.resolvedSymbolName)
-                                    .font(.headline)
+                                HStack(spacing: 6) {
+                                    Image(systemName: entry.category.resolvedSymbolName)
+                                        .foregroundStyle(entry.category.resolvedIconColor.swiftUIColor)
+                                    Text(entry.category.title)
+                                }
+                                .font(.headline)
                                 Spacer()
                                 Text(entry.amountUSD, format: .currency(code: "USD"))
                                     .font(.subheadline.weight(.semibold))
