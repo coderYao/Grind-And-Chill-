@@ -238,24 +238,40 @@ final class CategoriesViewModel {
     }
 
     func goalSummary(for category: Category) -> String {
+        let thresholdText: String
         switch category.resolvedUnit {
         case .time:
-            return "Goal \(category.dailyGoalMinutes)m"
+            thresholdText = "\(category.dailyGoalMinutes)m"
         case .count:
-            return "Goal \(category.dailyGoalMinutes) count"
+            thresholdText = "\(category.dailyGoalMinutes) count"
         case .money:
-            return "Goal \(Decimal(category.dailyGoalMinutes).formatted(.currency(code: "USD")))"
+            thresholdText = Decimal(category.dailyGoalMinutes).formatted(.currency(code: "USD"))
+        }
+
+        switch category.resolvedType {
+        case .goodHabit:
+            return "Goal \(thresholdText)"
+        case .quitHabit:
+            return "Target < \(thresholdText)"
         }
     }
 
     func dailyGoalLabel() -> String {
+        let thresholdText: String
         switch unit {
         case .time:
-            return "Daily Goal: \(dailyGoalMinutes)m"
+            thresholdText = "\(dailyGoalMinutes)m"
         case .count:
-            return "Daily Goal: \(dailyGoalMinutes) count"
+            thresholdText = "\(dailyGoalMinutes) count"
         case .money:
-            return "Daily Goal: \(Decimal(dailyGoalMinutes).formatted(.currency(code: "USD")))"
+            thresholdText = Decimal(dailyGoalMinutes).formatted(.currency(code: "USD"))
+        }
+
+        switch type {
+        case .goodHabit:
+            return "Daily Goal: \(thresholdText)"
+        case .quitHabit:
+            return "Daily Target: < \(thresholdText)"
         }
     }
 

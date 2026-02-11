@@ -18,14 +18,15 @@ final class DashboardViewModel {
     func progressText(for category: Category, entries: [Entry], now: Date = .now) -> String {
         let progress = streakService.totalProgress(for: category, on: now, entries: entries)
         let goal = Decimal(max(0, category.dailyGoalMinutes))
+        let thresholdText = formatted(goal, unit: category.resolvedUnit)
 
         switch category.resolvedType {
         case .goodHabit:
-            return "\(formatted(progress, unit: category.resolvedUnit))/\(formatted(goal, unit: category.resolvedUnit)) today"
+            return "\(formatted(progress, unit: category.resolvedUnit))/\(thresholdText) today"
         case .quitHabit:
             return progress == .zeroValue
-                ? "No relapses today"
-                : "\(formatted(progress, unit: category.resolvedUnit)) logged today"
+                ? "No relapses today • Target < \(thresholdText)"
+                : "\(formatted(progress, unit: category.resolvedUnit)) logged today • Target < \(thresholdText)"
         }
     }
 
