@@ -293,6 +293,348 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func dashboardDailyLedgerChangeUsesOnlyTodayEntries() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let now = date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar)
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+        let chillCategory = Category(
+            title: "Snacks",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 20,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 8, minute: 15, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "10.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 45, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-4.00") ?? .zeroValue,
+                category: chillCategory,
+                isManual: true,
+                quantity: Decimal(string: "4.00"),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 12, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "20.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let change = viewModel.dailyLedgerChange(entries: entries, on: now, calendar: calendar)
+        let breakdown = viewModel.dailyLedgerBreakdown(entries: entries, on: now, calendar: calendar)
+
+        #expect(change == (Decimal(string: "6.00") ?? .zeroValue))
+        #expect(breakdown.grind == (Decimal(string: "10.00") ?? .zeroValue))
+        #expect(breakdown.chill == (Decimal(string: "-4.00") ?? .zeroValue))
+        #expect(breakdown.entryCount == 2)
+    }
+
+    @Test
+    @MainActor
+    func dashboardDailyActivitiesGroupsEntriesByCategory() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let now = date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar)
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        let chillCategory = Category(
+            title: "Coffee",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 45,
+                amountUSD: Decimal(string: "13.50") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 11, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-6.00") ?? .zeroValue,
+                category: chillCategory,
+                isManual: true,
+                quantity: Decimal(string: "6.00"),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 14, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let activities = viewModel.dailyActivities(entries: entries, on: now, calendar: calendar)
+
+        #expect(activities.count == 2)
+        #expect(activities[0].title == "Coffee")
+
+        let deepWork = activities.first(where: { $0.title == "Deep Work" })
+        #expect(deepWork?.entryCount == 2)
+        #expect(deepWork?.totalQuantity == Decimal(75))
+        #expect(deepWork?.totalAmountUSD == (Decimal(string: "22.50") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func dashboardStreakHighlightChoosesHighestActiveStreak() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let now = date(year: 2026, month: 2, day: 10, hour: 12, minute: 0, calendar: calendar)
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+        let chillCategory = Category(
+            title: "Gaming",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 30,
+            unit: .time
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 9, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 8, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 5, hour: 22, minute: 0, calendar: calendar),
+                durationMinutes: 45,
+                amountUSD: Decimal(string: "-12.00") ?? .zeroValue,
+                category: chillCategory,
+                isManual: true
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let highlight = viewModel.streakHighlight(
+            categories: [grindCategory, chillCategory],
+            entries: entries,
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(highlight?.categoryID == chillCategory.id)
+        #expect(highlight?.streakDays == 5)
+        #expect(highlight?.type == .quitHabit)
+        #expect(highlight?.progressText.contains("Target <") == true)
+    }
+
+    @Test
+    @MainActor
+    func historyDailySummariesIncludeNetGainAndSpent() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+        let chillCategory = Category(
+            title: "Snacks",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "15.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-4.50") ?? .zeroValue,
+                category: chillCategory,
+                isManual: true,
+                quantity: Decimal(string: "4.50"),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 16, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "20.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        let summaries = viewModel.dailySummaries(from: entries, calendar: calendar)
+
+        #expect(summaries.count == 2)
+        #expect(summaries[0].date == calendar.startOfDay(for: date(year: 2026, month: 2, day: 11, hour: 0, minute: 0, calendar: calendar)))
+        #expect(summaries[0].ledgerChange == (Decimal(string: "10.50") ?? .zeroValue))
+        #expect(summaries[0].gain == (Decimal(string: "15.00") ?? .zeroValue))
+        #expect(summaries[0].spent == (Decimal(string: "4.50") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func historyDailySummariesRespectManualFilter() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 8, minute: 30, calendar: calendar),
+                durationMinutes: 15,
+                amountUSD: Decimal(string: "4.50") ?? .zeroValue,
+                category: category,
+                isManual: true
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        viewModel.showManualOnly = true
+
+        let filtered = viewModel.filteredEntries(from: entries)
+        let summaries = viewModel.dailySummaries(from: filtered, calendar: calendar)
+
+        #expect(filtered.count == 1)
+        #expect(summaries.count == 1)
+        #expect(summaries[0].ledgerChange == (Decimal(string: "4.50") ?? .zeroValue))
+        #expect(summaries[0].gain == (Decimal(string: "4.50") ?? .zeroValue))
+        #expect(summaries[0].spent == .zeroValue)
+    }
+
+    @Test
+    @MainActor
+    func historyChartPointsAreChronologicalAndSignedForBars() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "General",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "8.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 8, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-3.00") ?? .zeroValue,
+                category: category,
+                isManual: true
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "5.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        let summaries = viewModel.dailySummaries(from: entries, calendar: calendar)
+        let points = viewModel.chartPoints(from: summaries, dayLimit: 30)
+
+        #expect(points.count == 2)
+        #expect(points[0].date == calendar.startOfDay(for: date(year: 2026, month: 2, day: 10, hour: 0, minute: 0, calendar: calendar)))
+        #expect(points[1].date == calendar.startOfDay(for: date(year: 2026, month: 2, day: 11, hour: 0, minute: 0, calendar: calendar)))
+        #expect(points[1].gain == 8.0)
+        #expect(points[1].spent == 3.0)
+        #expect(points[1].spentAsNegative == -3.0)
+        #expect(points[1].ledgerChange == 5.0)
+    }
+
+    @Test
+    @MainActor
     func timerManagerRestoresPersistedSessionAndClearsOnStop() {
         let suiteName = "GrindNChill.TimerTests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {

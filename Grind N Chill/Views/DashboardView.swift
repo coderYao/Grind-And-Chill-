@@ -14,8 +14,10 @@ struct DashboardView: View {
         ScrollView {
             VStack(spacing: 16) {
                 balanceCard
+                dailyLedgerChangeCard
+                dailyActivitiesCard
+                streakHighlightCard
                 activeSessionCard
-                streaksCard
                 badgeCard
             }
             .padding()
@@ -40,6 +42,101 @@ struct DashboardView: View {
                 Text("You're in the red. Prioritize Grind sessions to recover.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.red)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var dailyLedgerChangeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Daily Ledger Change")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let dailyChange = viewModel.dailyLedgerChange(entries: entries, on: context.date)
+                let dailyBreakdown = viewModel.dailyLedgerBreakdown(entries: entries, on: context.date)
+                let chillAbsolute = viewModel.absolute(dailyBreakdown.chill)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(dailyChange.formatted(.currency(code: "USD")))
+                        .font(.title.bold())
+                        .foregroundStyle(Self.amountColor(for: dailyChange))
+
+                    HStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Grind")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(dailyBreakdown.grind.formatted(.currency(code: "USD")))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Self.amountColor(for: dailyBreakdown.grind))
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Chill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(chillAbsolute.formatted(.currency(code: "USD")))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(dailyBreakdown.chill < .zeroValue ? .red : .secondary)
+                        }
+                    }
+
+                    Text("\(dailyBreakdown.entryCount) \(Self.entryLabel(for: dailyBreakdown.entryCount)) today")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var dailyActivitiesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Daily Activities")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let activities = viewModel.dailyActivities(entries: entries, on: context.date)
+
+                if activities.isEmpty {
+                    Text("No activity logged today. Start a session or add a manual entry.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(Array(activities.prefix(5))) { activity in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: activity.symbolName)
+                                    .foregroundStyle(activity.iconColor.swiftUIColor)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(activity.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("\(activity.entryCount) \(Self.entryLabel(for: activity.entryCount)) • \(viewModel.activityQuantityText(for: activity))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Text(activity.totalAmountUSD.formatted(.currency(code: "USD")))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Self.amountColor(for: activity.totalAmountUSD))
+                            }
+                        }
+
+                        if activities.count > 5 {
+                            Text("+\(activities.count - 5) more")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -73,9 +170,9 @@ struct DashboardView: View {
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private var streaksCard: some View {
+    private var streakHighlightCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Streaks")
+            Text("Streak Highlight")
                 .font(.headline)
 
             if categories.isEmpty {
@@ -83,29 +180,31 @@ struct DashboardView: View {
                     .foregroundStyle(.secondary)
             } else {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
-                    VStack(spacing: 10) {
-                        ForEach(categories) { category in
-                            let streak = viewModel.streak(for: category, entries: entries, now: context.date)
-                            let progress = viewModel.progressText(for: category, entries: entries, now: context.date)
+                    if let highlight = viewModel.streakHighlight(
+                        categories: categories,
+                        entries: entries,
+                        now: context.date
+                    ) {
+                        HStack(spacing: 10) {
+                            Image(systemName: highlight.symbolName)
+                                .foregroundStyle(highlight.iconColor.swiftUIColor)
 
-                            HStack {
-                                Image(systemName: category.resolvedSymbolName)
-                                    .foregroundStyle(category.resolvedIconColor.swiftUIColor)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(category.title)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(progress)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Text("\(streak)d")
-                                    .font(.headline)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(highlight.title)
+                                    .font(.subheadline.weight(.semibold))
+                                Text("\(Self.typeLabel(for: highlight.type)) • \(highlight.progressText)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
+
+                            Spacer()
+
+                            Text("\(highlight.streakDays)d")
+                                .font(.title3.weight(.bold))
                         }
+                    } else {
+                        Text("No active streak yet. Hit your Grind target or keep Chill below the threshold today.")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -158,5 +257,28 @@ struct DashboardView: View {
         }
 
         return "\(milestone)-day streak"
+    }
+
+    private static func amountColor(for amount: Decimal) -> Color {
+        if amount > .zeroValue {
+            return .green
+        }
+        if amount < .zeroValue {
+            return .red
+        }
+        return .secondary
+    }
+
+    private static func entryLabel(for count: Int) -> String {
+        count == 1 ? "entry" : "entries"
+    }
+
+    private static func typeLabel(for type: CategoryType) -> String {
+        switch type {
+        case .goodHabit:
+            return "Grind"
+        case .quitHabit:
+            return "Chill"
+        }
     }
 }
