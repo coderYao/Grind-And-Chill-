@@ -2,6 +2,8 @@ import Foundation
 
 struct StreakService {
     func streak(for category: Category, entries: [Entry], now: Date = .now, calendar: Calendar = .current) -> Int {
+        guard category.resolvedStreakEnabled else { return 0 }
+
         let categoryEntries = entries.filter { $0.category.id == category.id }
 
         switch category.resolvedType {
@@ -107,6 +109,10 @@ struct StreakService {
     }
 
     private func progressValue(for entry: Entry, category: Category) -> Decimal {
+        if entry.bonusKey != nil {
+            return .zeroValue
+        }
+
         switch category.resolvedUnit {
         case .time:
             return Decimal(max(0, entry.durationMinutes))

@@ -10,6 +10,7 @@ final class Entry {
     var quantity: Decimal?
     var unit: CategoryUnit?
     var note: String
+    var bonusKey: String?
     var isManual: Bool
     var category: Category
 
@@ -20,6 +21,7 @@ final class Entry {
         amountUSD: Decimal,
         category: Category,
         note: String = "",
+        bonusKey: String? = nil,
         isManual: Bool,
         quantity: Decimal? = nil,
         unit: CategoryUnit? = nil
@@ -32,6 +34,7 @@ final class Entry {
         self.unit = unit
         self.category = category
         self.note = note
+        self.bonusKey = bonusKey
         self.isManual = isManual
     }
 

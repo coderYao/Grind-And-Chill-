@@ -253,6 +253,65 @@ private struct CategoryEditorSheet: View {
                     Stepper(value: $viewModel.dailyGoalMinutes, in: viewModel.dailyGoalRange()) {
                         Text(viewModel.dailyGoalLabel())
                     }
+                    .disabled(viewModel.streakEnabled == false)
+                }
+
+                Section("Streak & Badges") {
+                    Toggle("Track Streak", isOn: $viewModel.streakEnabled)
+                        .accessibilityIdentifier("categoryEditor.streakEnabled")
+
+                    if viewModel.streakEnabled {
+                        Toggle("Award Badges", isOn: $viewModel.badgeEnabled)
+                            .accessibilityIdentifier("categoryEditor.badgeEnabled")
+
+                        Toggle("Give Streak Bonus", isOn: $viewModel.streakBonusEnabled)
+                            .accessibilityIdentifier("categoryEditor.streakBonusEnabled")
+
+                        if viewModel.streakBonusEnabled {
+                            let milestones = viewModel.rewardMilestonesPreview()
+
+                            if milestones.isEmpty {
+                                Text("Set milestones to configure streak bonus amounts.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            ForEach(milestones, id: \.self) { milestone in
+                                HStack {
+                                    Text("\(milestone)-Day Bonus")
+                                    Spacer()
+                                    TextField(
+                                        "USD",
+                                        value: Binding(
+                                            get: { viewModel.streakBonusAmount(for: milestone) },
+                                            set: { viewModel.setStreakBonusAmount($0, for: milestone) }
+                                        ),
+                                        format: .number.precision(.fractionLength(2))
+                                    )
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.decimalPad)
+                                    .frame(width: 90)
+                                    .accessibilityIdentifier("categoryEditor.streakBonusAmount.\(milestone)")
+                                }
+                            }
+                        }
+
+                        if viewModel.badgeEnabled || viewModel.streakBonusEnabled {
+                            TextField("Milestones (days)", text: $viewModel.badgeMilestonesInput)
+                                .keyboardType(.numbersAndPunctuation)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .accessibilityIdentifier("categoryEditor.badgeMilestones")
+
+                            Text("Comma-separated days for streak rewards (example: 3, 7, 30).")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Streak tracking is disabled for this category.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if let error = viewModel.latestError {

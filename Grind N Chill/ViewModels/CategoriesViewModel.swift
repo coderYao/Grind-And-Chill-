@@ -31,9 +31,15 @@ final class CategoriesViewModel {
     var symbolName: String = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
     var iconColor: CategoryIconColor = .green
     var dailyGoalMinutes: Int = 30
+    var streakEnabled: Bool = true
+    var badgeEnabled: Bool = true
+    var badgeMilestonesInput: String = "3, 7, 30"
+    var streakBonusEnabled: Bool = false
+    var streakBonusAmountsUSD: [Int: Double] = [:]
 
     var latestError: String?
     var latestStatus: String?
+    private let defaultStreakBonusAmountUSD = 5.0
 
     var editorSheetTitle: String {
         switch editorMode {
@@ -66,6 +72,18 @@ final class CategoriesViewModel {
         symbolName = CategorySymbolCatalog.normalizedSymbol(category.resolvedSymbolName, for: category.resolvedType)
         iconColor = category.resolvedIconColor
         dailyGoalMinutes = category.dailyGoalMinutes
+        streakEnabled = category.resolvedStreakEnabled
+        badgeEnabled = category.resolvedBadgeEnabled
+        let milestones = category.resolvedBadgeMilestones()
+        badgeMilestonesInput = milestones
+            .map(String.init)
+            .joined(separator: ", ")
+        streakBonusEnabled = category.resolvedStreakBonusEnabled
+        let resolvedBonusSchedule = category.resolvedStreakBonusAmounts(defaultMilestones: milestones)
+        streakBonusAmountsUSD = milestones.reduce(into: [:]) { partialResult, milestone in
+            let amount = resolvedBonusSchedule[milestone] ?? Decimal(defaultStreakBonusAmountUSD)
+            partialResult[milestone] = NSDecimalNumber(decimal: amount.rounded(scale: 2)).doubleValue
+        }
         latestError = nil
         latestStatus = nil
         isPresentingEditorSheet = true
@@ -83,6 +101,56 @@ final class CategoriesViewModel {
         guard dailyGoalMinutes >= 0 else {
             latestError = "Daily goal cannot be negative."
             return false
+        }
+
+        if streakEnabled == false {
+            badgeEnabled = false
+            streakBonusEnabled = false
+        }
+
+        let normalizedMilestones: String?
+        if streakEnabled, (badgeEnabled || streakBonusEnabled) {
+            guard let milestones = parsedBadgeMilestones(from: badgeMilestonesInput) else {
+                latestError = "Milestones must be comma-separated positive days (example: 3, 7, 30)."
+                return false
+            }
+            normalizedMilestones = milestones.map(String.init).joined(separator: ",")
+        } else {
+            normalizedMilestones = nil
+        }
+
+        let normalizedBonusSchedule: String?
+        let representativeBonusAmount: Double?
+        if streakEnabled && streakBonusEnabled {
+            guard let milestones = parsedBadgeMilestones(from: badgeMilestonesInput) else {
+                latestError = "Milestones must be comma-separated positive days (example: 3, 7, 30)."
+                return false
+            }
+
+            var bonusSchedule: [Int: Decimal] = [:]
+            for milestone in milestones {
+                let rawAmount = streakBonusAmountsUSD[milestone] ?? defaultStreakBonusAmountUSD
+                guard rawAmount > 0 else {
+                    latestError = "Each streak bonus amount must be greater than zero."
+                    return false
+                }
+
+                let decimalAmount = (Decimal(string: String(rawAmount)) ?? Decimal(rawAmount)).rounded(scale: 2)
+                guard decimalAmount > .zeroValue else {
+                    latestError = "Each streak bonus amount must be greater than zero."
+                    return false
+                }
+                bonusSchedule[milestone] = decimalAmount
+            }
+
+            normalizedBonusSchedule = Category.encodeStreakBonusSchedule(bonusSchedule)
+            representativeBonusAmount = milestones.first.flatMap { streakBonusAmountsUSD[$0] } ?? defaultStreakBonusAmountUSD
+            streakBonusAmountsUSD = milestones.reduce(into: [:]) { partialResult, milestone in
+                partialResult[milestone] = streakBonusAmountsUSD[milestone] ?? defaultStreakBonusAmountUSD
+            }
+        } else {
+            normalizedBonusSchedule = nil
+            representativeBonusAmount = nil
         }
 
         switch unit {
@@ -120,6 +188,12 @@ final class CategoriesViewModel {
             category.hourlyRateUSD = (unit == .time && timeConversionMode == .hourlyRate) ? hourlyRateUSD : nil
             category.usdPerCount = unit == .count ? usdPerCount : nil
             category.dailyGoalMinutes = dailyGoalMinutes
+            category.streakEnabled = streakEnabled
+            category.badgeEnabled = streakEnabled ? badgeEnabled : false
+            category.badgeMilestones = normalizedMilestones
+            category.streakBonusEnabled = streakEnabled ? streakBonusEnabled : false
+            category.streakBonusAmountUSD = representativeBonusAmount
+            category.streakBonusSchedule = normalizedBonusSchedule
             category.symbolName = normalizedSymbol
             category.iconColor = iconColor
         } else {
@@ -133,7 +207,13 @@ final class CategoriesViewModel {
                 unit: unit,
                 timeConversionMode: timeConversionMode,
                 hourlyRateUSD: (unit == .time && timeConversionMode == .hourlyRate) ? hourlyRateUSD : nil,
-                usdPerCount: unit == .count ? usdPerCount : nil
+                usdPerCount: unit == .count ? usdPerCount : nil,
+                streakEnabled: streakEnabled,
+                badgeEnabled: streakEnabled ? badgeEnabled : false,
+                badgeMilestones: normalizedMilestones,
+                streakBonusEnabled: streakEnabled ? streakBonusEnabled : false,
+                streakBonusAmountUSD: representativeBonusAmount,
+                streakBonusSchedule: normalizedBonusSchedule
             )
             modelContext.insert(category)
         }
@@ -212,6 +292,11 @@ final class CategoriesViewModel {
         symbolName = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
         iconColor = CategoryIconColor.defaultColor(for: type)
         dailyGoalMinutes = 30
+        streakEnabled = true
+        badgeEnabled = true
+        badgeMilestonesInput = "3, 7, 30"
+        streakBonusEnabled = false
+        streakBonusAmountsUSD = [:]
     }
 
     func symbolOptions() -> [String] {
@@ -238,6 +323,10 @@ final class CategoriesViewModel {
     }
 
     func goalSummary(for category: Category) -> String {
+        guard category.resolvedStreakEnabled else {
+            return "Streak off"
+        }
+
         let thresholdText: String
         switch category.resolvedUnit {
         case .time:
@@ -257,6 +346,10 @@ final class CategoriesViewModel {
     }
 
     func dailyGoalLabel() -> String {
+        guard streakEnabled else {
+            return "Streak Tracking Disabled"
+        }
+
         let thresholdText: String
         switch unit {
         case .time:
@@ -284,5 +377,31 @@ final class CategoriesViewModel {
         case .money:
             return 0 ... 10_000
         }
+    }
+
+    func rewardMilestonesPreview() -> [Int] {
+        parsedBadgeMilestones(from: badgeMilestonesInput) ?? []
+    }
+
+    func streakBonusAmount(for milestone: Int) -> Double {
+        let configuredAmount = streakBonusAmountsUSD[milestone]
+        guard let configuredAmount, configuredAmount > 0 else {
+            return defaultStreakBonusAmountUSD
+        }
+        return configuredAmount
+    }
+
+    func setStreakBonusAmount(_ amount: Double, for milestone: Int) {
+        streakBonusAmountsUSD[milestone] = amount
+    }
+
+    private func parsedBadgeMilestones(from raw: String) -> [Int]? {
+        let values = raw
+            .split(whereSeparator: { $0 == "," || $0 == " " })
+            .compactMap { Int($0) }
+            .filter { $0 > 0 }
+
+        let normalized = Array(Set(values)).sorted()
+        return normalized.isEmpty ? nil : normalized
     }
 }

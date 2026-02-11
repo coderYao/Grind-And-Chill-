@@ -736,6 +736,98 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func badgesRespectCategoryConfiguration() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let now = date(year: 2026, month: 2, day: 10, hour: 12, minute: 0, calendar: calendar)
+
+        let category = Category(
+            title: "Configured Badges",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            badgeMilestones: "2,4",
+            streakBonusEnabled: true,
+            streakBonusSchedule: "2:1.25,4:3.50"
+        )
+        modelContext.insert(category)
+
+        var entries: [Entry] = []
+        for dayOffset in 0 ..< 4 {
+            let timestamp = calendar.date(byAdding: .day, value: -dayOffset, to: now) ?? now
+            let entry = Entry(
+                timestamp: timestamp,
+                durationMinutes: 60,
+                amountUSD: Decimal(5),
+                category: category,
+                isManual: false
+            )
+            modelContext.insert(entry)
+            entries.append(entry)
+        }
+        try modelContext.save()
+
+        var badgeService = BadgeService()
+        badgeService.milestones = [3, 7, 30]
+
+        let awards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(awards.count == 2)
+        let allEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+        let bonusEntries = allEntries.filter { $0.bonusKey != nil }
+        #expect(bonusEntries.count == 2)
+        let bonusAmounts = Set(bonusEntries.map { NSDecimalNumber(decimal: $0.amountUSD).stringValue })
+        #expect(bonusAmounts == Set(["1.25", "3.5"]))
+
+        category.badgeEnabled = false
+        let disabledAwards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: now,
+            calendar: calendar
+        )
+        #expect(disabledAwards.isEmpty)
+        let entriesAfterDisableBadge = try modelContext.fetch(FetchDescriptor<Entry>())
+        let bonusAfterDisableBadge = entriesAfterDisableBadge.filter { $0.bonusKey != nil }
+        #expect(bonusAfterDisableBadge.count == 2)
+
+        category.badgeEnabled = true
+        category.streakEnabled = false
+        let streakDisabledAwards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: now,
+            calendar: calendar
+        )
+        #expect(streakDisabledAwards.isEmpty)
+
+        category.streakEnabled = true
+        category.badgeEnabled = false
+        category.streakBonusEnabled = false
+        let noRewardAwards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: now,
+            calendar: calendar
+        )
+        #expect(noRewardAwards.isEmpty)
+    }
+
+    @Test
+    @MainActor
     func deletingActiveCategoryIsBlocked() throws {
         let container = try makeInMemoryContainer()
         let modelContext = ModelContext(container)
@@ -799,6 +891,13 @@ struct Grind_N_ChillTests {
         viewModel.type = .goodHabit
         viewModel.iconColor = .teal
         viewModel.dailyGoalMinutes = 75
+        viewModel.streakEnabled = true
+        viewModel.badgeEnabled = true
+        viewModel.badgeMilestonesInput = "3, 10, 20"
+        viewModel.streakBonusEnabled = true
+        viewModel.setStreakBonusAmount(4.5, for: 3)
+        viewModel.setStreakBonusAmount(8.0, for: 10)
+        viewModel.setStreakBonusAmount(12.25, for: 20)
 
         let created = viewModel.saveCategory(in: modelContext, existingCategories: [])
         #expect(created == true)
@@ -814,11 +913,22 @@ struct Grind_N_ChillTests {
             return
         }
 
+        let createdBonusSchedule = savedCategory.resolvedStreakBonusAmounts(defaultMilestones: [3, 10, 20])
+        #expect(createdBonusSchedule[3] == Decimal(string: "4.5"))
+        #expect(createdBonusSchedule[10] == Decimal(string: "8"))
+        #expect(createdBonusSchedule[20] == Decimal(string: "12.25"))
+
         viewModel.beginEditing(savedCategory)
         viewModel.title = "Writing Sprint"
         viewModel.multiplier = 1.4
         viewModel.iconColor = .pink
         viewModel.dailyGoalMinutes = 90
+        viewModel.streakEnabled = false
+        viewModel.badgeEnabled = true
+        viewModel.badgeMilestonesInput = "5, 9"
+        viewModel.streakBonusEnabled = true
+        viewModel.setStreakBonusAmount(9, for: 5)
+        viewModel.setStreakBonusAmount(11, for: 9)
 
         let updated = viewModel.saveCategory(
             in: modelContext,
@@ -834,6 +944,9 @@ struct Grind_N_ChillTests {
         #expect(categoriesAfterEdit.first?.multiplier == 1.4)
         #expect(categoriesAfterEdit.first?.dailyGoalMinutes == 90)
         #expect(categoriesAfterEdit.first?.iconColor == .pink)
+        #expect(categoriesAfterEdit.first?.resolvedStreakEnabled == false)
+        #expect(categoriesAfterEdit.first?.resolvedBadgeEnabled == false)
+        #expect(categoriesAfterEdit.first?.resolvedStreakBonusEnabled == false)
     }
 
     @Test
@@ -909,6 +1022,9 @@ struct Grind_N_ChillTests {
         #expect(fetched[0].resolvedUnit == .time)
         #expect(fetched[0].multiplier == 1)
         #expect(fetched[0].dailyGoalMinutes == 0)
+        #expect(fetched[0].resolvedStreakEnabled == true)
+        #expect(fetched[0].resolvedBadgeEnabled == true)
+        #expect(fetched[0].resolvedStreakBonusEnabled == false)
         #expect(fetched[0].symbolName == CategorySymbolCatalog.defaultSymbol(for: .goodHabit))
     }
 
