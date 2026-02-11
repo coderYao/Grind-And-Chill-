@@ -10,14 +10,24 @@ final class SessionViewModel {
 
     var selectedCategoryID: UUID?
     var manualMinutes: Int = 30
+    var manualCount: Int = 1
+    var manualAmountUSD: Double = 5
     var manualNote: String = ""
     var sessionNote: String = ""
     var latestStatus: String?
     var latestError: String?
 
-    func startSession(with timerManager: TimerManager) {
-        guard let selectedCategoryID else {
+    func startSession(with timerManager: TimerManager, categories: [Category]) {
+        guard
+            let selectedCategoryID,
+            let category = categories.first(where: { $0.id == selectedCategoryID })
+        else {
             latestError = "Pick a category before starting."
+            return
+        }
+
+        guard category.resolvedUnit == .time else {
+            latestError = "Live timer is only available for Time categories."
             return
         }
 
@@ -43,13 +53,14 @@ final class SessionViewModel {
             return
         }
 
+        guard category.resolvedUnit == .time else {
+            latestError = "Timer sessions can only be saved for Time categories."
+            return
+        }
+
         let durationMinutes = max(1, Int((Double(completed.elapsedSeconds) / 60).rounded()))
-        let amount = ledgerService.earnedUSD(
-            minutes: durationMinutes,
-            usdPerHour: usdPerHour,
-            categoryMultiplier: category.multiplier,
-            categoryType: category.resolvedType
-        )
+        let quantity = Decimal(durationMinutes)
+        let amount = ledgerService.amountUSD(for: category, quantity: quantity, usdPerHour: usdPerHour)
 
         let note = sessionNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let entry = Entry(
@@ -58,7 +69,9 @@ final class SessionViewModel {
             amountUSD: amount,
             category: category,
             note: note,
-            isManual: false
+            isManual: false,
+            quantity: quantity,
+            unit: .time
         )
 
         modelContext.insert(entry)
@@ -88,11 +101,6 @@ final class SessionViewModel {
         modelContext: ModelContext,
         usdPerHour: Decimal
     ) {
-        guard manualMinutes > 0 else {
-            latestError = "Manual minutes must be greater than zero."
-            return
-        }
-
         guard let selectedCategoryID,
               let category = categories.first(where: { $0.id == selectedCategoryID })
         else {
@@ -100,21 +108,45 @@ final class SessionViewModel {
             return
         }
 
-        let amount = ledgerService.earnedUSD(
-            minutes: manualMinutes,
-            usdPerHour: usdPerHour,
-            categoryMultiplier: category.multiplier,
-            categoryType: category.resolvedType
-        )
+        let durationMinutes: Int
+        let quantity: Decimal
+
+        switch category.resolvedUnit {
+        case .time:
+            guard manualMinutes > 0 else {
+                latestError = "Manual minutes must be greater than zero."
+                return
+            }
+            durationMinutes = manualMinutes
+            quantity = Decimal(manualMinutes)
+        case .count:
+            guard manualCount > 0 else {
+                latestError = "Count must be greater than zero."
+                return
+            }
+            durationMinutes = 0
+            quantity = Decimal(manualCount)
+        case .money:
+            guard manualAmountUSD > 0 else {
+                latestError = "Amount must be greater than zero."
+                return
+            }
+            durationMinutes = 0
+            quantity = decimal(from: manualAmountUSD)
+        }
+
+        let amount = ledgerService.amountUSD(for: category, quantity: quantity, usdPerHour: usdPerHour)
 
         let note = manualNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let entry = Entry(
             timestamp: .now,
-            durationMinutes: manualMinutes,
+            durationMinutes: durationMinutes,
             amountUSD: amount,
             category: category,
             note: note,
-            isManual: true
+            isManual: true,
+            quantity: quantity,
+            unit: category.resolvedUnit
         )
 
         modelContext.insert(entry)
@@ -162,5 +194,9 @@ final class SessionViewModel {
         }
 
         return category.title
+    }
+
+    private func decimal(from value: Double) -> Decimal {
+        Decimal(string: String(value)) ?? Decimal(value)
     }
 }

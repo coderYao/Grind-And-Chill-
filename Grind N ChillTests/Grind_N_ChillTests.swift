@@ -32,6 +32,196 @@ struct Grind_N_ChillTests {
     }
 
     @Test
+    func ledgerSupportsTimeRateCountAndMoneyUnits() {
+        let service = LedgerService()
+        let globalRate = Decimal(string: "18") ?? Decimal(18)
+
+        let timeByRateCategory = Category(
+            title: "Consulting",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time,
+            timeConversionMode: .hourlyRate,
+            hourlyRateUSD: 30
+        )
+        let timeAmount = service.amountUSD(
+            for: timeByRateCategory,
+            quantity: Decimal(90),
+            usdPerHour: globalRate
+        )
+        #expect(timeAmount == (Decimal(string: "45.00") ?? .zeroValue))
+
+        let countCategory = Category(
+            title: "Pushups",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 50,
+            unit: .count,
+            usdPerCount: 2.5
+        )
+        let countAmount = service.amountUSD(
+            for: countCategory,
+            quantity: Decimal(4),
+            usdPerHour: globalRate
+        )
+        #expect(countAmount == (Decimal(string: "10.00") ?? .zeroValue))
+
+        let moneyCategory = Category(
+            title: "Impulse Spend",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 20,
+            unit: .money
+        )
+        let moneyAmount = service.amountUSD(
+            for: moneyCategory,
+            quantity: Decimal(12.5),
+            usdPerHour: globalRate
+        )
+        #expect(moneyAmount == (Decimal(string: "-12.50") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func manualCountEntryStoresUnitQuantityAndConvertedAmount() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Pushups",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 20,
+            unit: .count,
+            usdPerCount: 2.5
+        )
+        modelContext.insert(category)
+        try modelContext.save()
+
+        let viewModel = SessionViewModel()
+        viewModel.selectedCategoryID = category.id
+        viewModel.manualCount = 3
+
+        viewModel.addManualEntry(
+            categories: [category],
+            existingEntries: [],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entries.count == 1)
+        #expect(entries[0].unit == .count)
+        #expect(entries[0].quantity == Decimal(3))
+        #expect(entries[0].durationMinutes == 0)
+        #expect(entries[0].amountUSD == (Decimal(string: "7.50") ?? .zeroValue))
+        #expect(viewModel.latestStatus == "Manual entry saved.")
+    }
+
+    @Test
+    @MainActor
+    func manualMoneyEntryUsesDirectAmountWithChillSign() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Coffee",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+        modelContext.insert(category)
+        try modelContext.save()
+
+        let viewModel = SessionViewModel()
+        viewModel.selectedCategoryID = category.id
+        viewModel.manualAmountUSD = 7.25
+
+        viewModel.addManualEntry(
+            categories: [category],
+            existingEntries: [],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entries.count == 1)
+        #expect(entries[0].unit == .money)
+        #expect(entries[0].quantity == (Decimal(string: "7.25") ?? .zeroValue))
+        #expect(entries[0].amountUSD == (Decimal(string: "-7.25") ?? .zeroValue))
+        #expect(viewModel.latestStatus == "Manual entry saved.")
+    }
+
+    @Test
+    @MainActor
+    func manualTimeEntryUsesCustomHourlyRateWhenConfigured() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time,
+            timeConversionMode: .hourlyRate,
+            hourlyRateUSD: 30
+        )
+        modelContext.insert(category)
+        try modelContext.save()
+
+        let viewModel = SessionViewModel()
+        viewModel.selectedCategoryID = category.id
+        viewModel.manualMinutes = 30
+
+        viewModel.addManualEntry(
+            categories: [category],
+            existingEntries: [],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entries.count == 1)
+        #expect(entries[0].unit == .time)
+        #expect(entries[0].durationMinutes == 30)
+        #expect(entries[0].amountUSD == (Decimal(string: "15.00") ?? .zeroValue))
+        #expect(viewModel.latestStatus == "Manual entry saved.")
+    }
+
+    @Test
+    @MainActor
+    func startSessionRejectsNonTimeCategories() {
+        let suiteName = "GrindNChill.SessionViewModel.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults suite.")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let category = Category(
+            title: "Water",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 8,
+            unit: .count,
+            usdPerCount: 1
+        )
+
+        let timerManager = TimerManager(userDefaults: defaults)
+        let viewModel = SessionViewModel()
+        viewModel.selectedCategoryID = category.id
+
+        viewModel.startSession(with: timerManager, categories: [category])
+
+        #expect(timerManager.isRunning == false)
+        #expect(viewModel.latestError?.contains("Time categories") == true)
+    }
+
+    @Test
     func goodHabitStreakSkipsIncompleteTodayAndCountsPreviousDays() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -303,6 +493,31 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func creatingCountCategoryPersistsUnitAndValuePerCount() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let viewModel = CategoriesViewModel()
+        viewModel.beginCreating()
+        viewModel.title = "Water Cups"
+        viewModel.type = .goodHabit
+        viewModel.unit = .count
+        viewModel.usdPerCount = 1.75
+        viewModel.dailyGoalMinutes = 8
+
+        let saved = viewModel.saveCategory(in: modelContext, existingCategories: [])
+        #expect(saved == true)
+
+        let categories = try modelContext.fetch(
+            FetchDescriptor<Grind_N_Chill.Category>()
+        )
+        #expect(categories.count == 1)
+        #expect(categories[0].resolvedUnit == .count)
+        #expect(categories[0].usdPerCount == 1.75)
+    }
+
+    @Test
+    @MainActor
     func categorySeederSeedsOnceOnlyWhenEmpty() throws {
         let container = try makeInMemoryContainer()
         let modelContext = ModelContext(container)
@@ -318,6 +533,38 @@ struct Grind_N_ChillTests {
             FetchDescriptor<Grind_N_Chill.Category>()
         )
         #expect(secondSeedCount == 3)
+    }
+
+    @Test
+    @MainActor
+    func legacyCategoryRepairBackfillsInvalidFields() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let legacyCategory = Category(
+            title: "Legacy",
+            multiplier: 1.2,
+            type: .goodHabit,
+            dailyGoalMinutes: 25,
+            symbolName: nil
+        )
+        legacyCategory.type = nil
+        legacyCategory.multiplier = 0
+        legacyCategory.dailyGoalMinutes = -10
+        legacyCategory.symbolName = "invalid.symbol"
+        modelContext.insert(legacyCategory)
+        try modelContext.save()
+
+        let repairedCount = try LegacyDataRepairService.repairCategoriesIfNeeded(in: modelContext)
+        #expect(repairedCount == 1)
+
+        let fetched = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        #expect(fetched.count == 1)
+        #expect(fetched[0].resolvedType == .goodHabit)
+        #expect(fetched[0].resolvedUnit == .time)
+        #expect(fetched[0].multiplier == 1)
+        #expect(fetched[0].dailyGoalMinutes == 0)
+        #expect(fetched[0].symbolName == CategorySymbolCatalog.defaultSymbol(for: .goodHabit))
     }
 
     @Test

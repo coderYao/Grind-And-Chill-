@@ -16,13 +16,29 @@ final class DashboardViewModel {
     }
 
     func progressText(for category: Category, entries: [Entry], now: Date = .now) -> String {
-        let minutes = streakService.totalMinutes(for: category, on: now, entries: entries)
+        let progress = streakService.totalProgress(for: category, on: now, entries: entries)
+        let goal = Decimal(max(0, category.dailyGoalMinutes))
 
         switch category.resolvedType {
         case .goodHabit:
-            return "\(minutes)/\(category.dailyGoalMinutes)m today"
+            return "\(formatted(progress, unit: category.resolvedUnit))/\(formatted(goal, unit: category.resolvedUnit)) today"
         case .quitHabit:
-            return minutes == 0 ? "No relapses today" : "\(minutes)m logged today"
+            return progress == .zeroValue
+                ? "No relapses today"
+                : "\(formatted(progress, unit: category.resolvedUnit)) logged today"
+        }
+    }
+
+    private func formatted(_ value: Decimal, unit: CategoryUnit) -> String {
+        switch unit {
+        case .time:
+            let minutes = NSDecimalNumber(decimal: value).intValue
+            return "\(max(0, minutes))m"
+        case .count:
+            let number = NSDecimalNumber(decimal: value).doubleValue
+            return number.formatted(.number.precision(.fractionLength(0 ... 2)))
+        case .money:
+            return value.formatted(.currency(code: "USD"))
         }
     }
 }

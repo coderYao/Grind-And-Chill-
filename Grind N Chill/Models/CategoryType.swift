@@ -9,9 +9,9 @@ enum CategoryType: String, Codable, CaseIterable, Identifiable {
     var displayTitle: String {
         switch self {
         case .goodHabit:
-            return "Good Habit"
+            return "Grind"
         case .quitHabit:
-            return "Quit Habit"
+            return "Chill"
         }
     }
 

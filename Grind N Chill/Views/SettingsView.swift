@@ -44,7 +44,7 @@ struct SettingsView: View {
             }
 
             Section("How It Works") {
-                Text("Good Habit time adds money to your ledger. Quit Habit time subtracts money.")
+                Text("Grind time adds money to your ledger. Chill time subtracts money.")
                 Text("Streaks are calendar-based and recalculate automatically after midnight.")
             }
         }

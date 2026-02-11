@@ -18,12 +18,12 @@ struct StreakService {
         }
     }
 
-    func totalMinutes(
+    func totalProgress(
         for category: Category,
         on day: Date,
         entries: [Entry],
         calendar: Calendar = .current
-    ) -> Int {
+    ) -> Decimal {
         let targetDay = calendar.startOfDay(for: day)
 
         return entries
@@ -31,7 +31,26 @@ struct StreakService {
                 $0.category.id == category.id &&
                 calendar.isDate($0.timestamp, inSameDayAs: targetDay)
             }
-            .reduce(0) { $0 + $1.durationMinutes }
+            .reduce(.zeroValue) { partialResult, entry in
+                partialResult + progressValue(for: entry, category: category)
+            }
+    }
+
+    func totalMinutes(
+        for category: Category,
+        on day: Date,
+        entries: [Entry],
+        calendar: Calendar = .current
+    ) -> Int {
+        let progress = totalProgress(for: category, on: day, entries: entries, calendar: calendar)
+        let wholeValue = NSDecimalNumber(decimal: progress).intValue
+
+        switch category.resolvedUnit {
+        case .time:
+            return max(0, wholeValue)
+        case .count, .money:
+            return max(0, wholeValue)
+        }
     }
 
     private func goodHabitStreak(
@@ -40,17 +59,18 @@ struct StreakService {
         now: Date,
         calendar: Calendar
     ) -> Int {
-        guard category.dailyGoalMinutes > 0 else { return 0 }
+        let goal = Decimal(max(0, category.dailyGoalMinutes))
+        guard goal > .zeroValue else { return 0 }
 
-        var totalsByDay: [Date: Int] = [:]
+        var totalsByDay: [Date: Decimal] = [:]
 
         for entry in entries {
             let day = calendar.startOfDay(for: entry.timestamp)
-            totalsByDay[day, default: 0] += entry.durationMinutes
+            totalsByDay[day, default: .zeroValue] += progressValue(for: entry, category: category)
         }
 
         let today = calendar.startOfDay(for: now)
-        let hasHitGoalToday = (totalsByDay[today] ?? 0) >= category.dailyGoalMinutes
+        let hasHitGoalToday = (totalsByDay[today] ?? .zeroValue) >= goal
 
         guard let firstCheckDay = calendar.date(
             byAdding: .day,
@@ -63,7 +83,7 @@ struct StreakService {
         var streak = 0
         var cursor = firstCheckDay
 
-        while (totalsByDay[cursor] ?? 0) >= category.dailyGoalMinutes {
+        while (totalsByDay[cursor] ?? .zeroValue) >= goal {
             streak += 1
             guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else {
                 break
@@ -84,5 +104,19 @@ struct StreakService {
         let days = calendar.dateComponents([.day], from: start, to: end).day ?? 0
 
         return max(0, days)
+    }
+
+    private func progressValue(for entry: Entry, category: Category) -> Decimal {
+        switch category.resolvedUnit {
+        case .time:
+            return Decimal(max(0, entry.durationMinutes))
+        case .count:
+            return entry.resolvedUnit == .count ? entry.resolvedQuantity : Decimal(max(0, entry.durationMinutes))
+        case .money:
+            if entry.amountUSD < .zeroValue {
+                return entry.amountUSD * Decimal(-1)
+            }
+            return entry.amountUSD
+        }
     }
 }

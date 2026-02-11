@@ -15,12 +15,13 @@ final class HistoryViewModel {
 
     func subtitle(for entry: Entry) -> String {
         let mode = entry.isManual ? "Manual" : "Timer"
+        let metric = quantityLabel(for: entry)
 
         if entry.note.isEmpty {
-            return "\(mode) • \(entry.durationMinutes)m"
+            return "\(mode) • \(metric)"
         }
 
-        return "\(mode) • \(entry.durationMinutes)m • \(entry.note)"
+        return "\(mode) • \(metric) • \(entry.note)"
     }
 
     func deleteEntries(at offsets: IndexSet, from entries: [Entry], modelContext: ModelContext) {
@@ -33,6 +34,18 @@ final class HistoryViewModel {
             latestError = nil
         } catch {
             latestError = "Could not delete entry: \(error.localizedDescription)"
+        }
+    }
+
+    private func quantityLabel(for entry: Entry) -> String {
+        switch entry.resolvedUnit {
+        case .time:
+            return "\(entry.durationMinutes)m"
+        case .count:
+            let quantity = NSDecimalNumber(decimal: entry.resolvedQuantity).doubleValue
+            return quantity.formatted(.number.precision(.fractionLength(0 ... 2)))
+        case .money:
+            return entry.resolvedQuantity.formatted(.currency(code: "USD"))
         }
     }
 }

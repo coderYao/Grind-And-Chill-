@@ -13,6 +13,10 @@ struct SessionView: View {
     @State private var viewModel = SessionViewModel()
     @State private var settingsViewModel = SettingsViewModel()
 
+    private var selectedCategory: Category? {
+        categories.first(where: { $0.id == viewModel.selectedCategoryID })
+    }
+
     var body: some View {
         Form {
             categoryPickerSection
@@ -55,6 +59,7 @@ struct SessionView: View {
                             .tag(Optional(category.id))
                     }
                 }
+                .accessibilityIdentifier("session.track")
             }
         }
     }
@@ -83,13 +88,20 @@ struct SessionView: View {
                         usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
                     )
                 }
+                .accessibilityIdentifier("session.stopSave")
                 .buttonStyle(.borderedProminent)
             } else {
-                Button("Start Session") {
-                    viewModel.startSession(with: timerManager)
+                if selectedCategory?.resolvedUnit != .time {
+                    Text("Live timer is available for Time categories only.")
+                        .foregroundStyle(.secondary)
                 }
+
+                Button("Start Session") {
+                    viewModel.startSession(with: timerManager, categories: categories)
+                }
+                .accessibilityIdentifier("session.start")
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.selectedCategoryID == nil)
+                .disabled(viewModel.selectedCategoryID == nil || selectedCategory?.resolvedUnit != .time)
             }
         }
     }
@@ -98,8 +110,34 @@ struct SessionView: View {
         Section("Manual Entry") {
             @Bindable var bindableViewModel = viewModel
 
-            Stepper(value: $bindableViewModel.manualMinutes, in: 1 ... 600) {
-                Text("Duration: \(viewModel.manualMinutes) minutes")
+            if let selectedCategory {
+                switch selectedCategory.resolvedUnit {
+                case .time:
+                    Stepper(value: $bindableViewModel.manualMinutes, in: 1 ... 600) {
+                        Text("Duration: \(viewModel.manualMinutes) minutes")
+                    }
+                case .count:
+                    Stepper(value: $bindableViewModel.manualCount, in: 1 ... 500) {
+                        Text("Count: \(viewModel.manualCount)")
+                    }
+                case .money:
+                    HStack {
+                        Text("Amount (USD)")
+                        Spacer()
+                        TextField(
+                            "Amount",
+                            value: $bindableViewModel.manualAmountUSD,
+                            format: .number.precision(.fractionLength(2))
+                        )
+                        .accessibilityIdentifier("session.manualAmount")
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                    }
+                }
+            } else {
+                Text("Pick a category to log a manual entry.")
+                    .foregroundStyle(.secondary)
             }
 
             TextField("Manual note", text: $bindableViewModel.manualNote, axis: .vertical)
@@ -112,6 +150,7 @@ struct SessionView: View {
                     usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
                 )
             }
+            .accessibilityIdentifier("session.saveManual")
             .disabled(viewModel.selectedCategoryID == nil)
         }
     }

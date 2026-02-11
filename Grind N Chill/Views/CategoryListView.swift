@@ -42,7 +42,7 @@ struct CategoryListView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(category.title)
                                     .font(.headline)
-                                Text("Multiplier \(category.multiplier, specifier: "%.2f") • Goal \(category.dailyGoalMinutes)m")
+                                Text("\(viewModel.conversionSummary(for: category)) • \(viewModel.goalSummary(for: category))")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -83,7 +83,7 @@ struct CategoryListView: View {
                 existingCategories: categories,
                 sheetTitle: viewModel.editorSheetTitle
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
         }
     }
 }
@@ -101,6 +101,7 @@ private struct CategoryEditorSheet: View {
             Form {
                 Section("Details") {
                     TextField("Title", text: $viewModel.title)
+                        .accessibilityIdentifier("categoryEditor.title")
 
                     Picker("Type", selection: $viewModel.type) {
                         ForEach(CategoryType.allCases) { type in
@@ -108,6 +109,16 @@ private struct CategoryEditorSheet: View {
                                 .tag(type)
                         }
                     }
+                    .accessibilityIdentifier("categoryEditor.type")
+
+                    Picker("Unit", selection: $viewModel.unit) {
+                        ForEach(CategoryUnit.allCases) { unit in
+                            Text(unit.displayTitle)
+                                .tag(unit)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("categoryEditor.unit")
 
                     Picker("Icon", selection: $viewModel.symbolName) {
                         ForEach(viewModel.symbolOptions(), id: \.self) { symbol in
@@ -115,22 +126,74 @@ private struct CategoryEditorSheet: View {
                                 .tag(symbol)
                         }
                     }
+                    .accessibilityIdentifier("categoryEditor.icon")
+                }
 
-                    HStack {
-                        Text("Multiplier")
-                        Spacer()
-                        TextField(
-                            "Multiplier",
-                            value: $viewModel.multiplier,
-                            format: .number.precision(.fractionLength(2))
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(.decimalPad)
-                        .frame(width: 90)
+                Section("Ledger Conversion") {
+                    switch viewModel.unit {
+                    case .time:
+                        Picker("Time Conversion", selection: $viewModel.timeConversionMode) {
+                            ForEach(TimeConversionMode.allCases) { mode in
+                                Text(mode.displayTitle)
+                                    .tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("categoryEditor.timeConversion")
+
+                        switch viewModel.timeConversionMode {
+                        case .multiplier:
+                            HStack {
+                                Text("Multiplier")
+                                Spacer()
+                                TextField(
+                                    "Multiplier",
+                                    value: $viewModel.multiplier,
+                                    format: .number.precision(.fractionLength(2))
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(.decimalPad)
+                                .frame(width: 90)
+                                .accessibilityIdentifier("categoryEditor.multiplier")
+                            }
+                        case .hourlyRate:
+                            HStack {
+                                Text("Rate per Hour")
+                                Spacer()
+                                TextField(
+                                    "USD/hour",
+                                    value: $viewModel.hourlyRateUSD,
+                                    format: .number.precision(.fractionLength(2))
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(.decimalPad)
+                                .frame(width: 110)
+                                .accessibilityIdentifier("categoryEditor.rate")
+                            }
+                        }
+                    case .count:
+                        HStack {
+                            Text("Value per Count")
+                            Spacer()
+                            TextField(
+                                "USD/count",
+                                value: $viewModel.usdPerCount,
+                                format: .number.precision(.fractionLength(2))
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 110)
+                            .accessibilityIdentifier("categoryEditor.usdPerCount")
+                        }
+                    case .money:
+                        Text("Money categories log direct USD entries.")
+                            .foregroundStyle(.secondary)
                     }
+                }
 
-                    Stepper(value: $viewModel.dailyGoalMinutes, in: 0 ... 600) {
-                        Text("Daily Goal: \(viewModel.dailyGoalMinutes)m")
+                Section("Goal") {
+                    Stepper(value: $viewModel.dailyGoalMinutes, in: viewModel.dailyGoalRange()) {
+                        Text(viewModel.dailyGoalLabel())
                     }
                 }
 

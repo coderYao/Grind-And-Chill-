@@ -37,7 +37,7 @@ struct DashboardView: View {
                 .foregroundStyle(.secondary)
 
             if balance < .zeroValue {
-                Text("You're in the red. Prioritize Good Habit sessions to recover.")
+                Text("You're in the red. Prioritize Grind sessions to recover.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.red)
             }

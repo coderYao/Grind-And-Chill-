@@ -8,34 +8,263 @@
 import XCTest
 
 final class Grind_N_ChillUITests: XCTestCase {
+    private enum TestCategoryUnit {
+        case time
+        case count
+        case money
+
+        var label: String {
+            switch self {
+            case .time:
+                return "Time"
+            case .count:
+                return "Count"
+            case .money:
+                return "Money"
+            }
+        }
+    }
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
+    func testCategoryCreateEditDeleteFlow() throws {
+        let app = makeApp()
         app.launch()
+        navigateToTab("Categories", in: app)
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        let originalTitle = "UI Focus"
+        let updatedTitle = "UI Focus Updated"
+
+        addCategory(named: originalTitle, in: app)
+        XCTAssertTrue(app.staticTexts[originalTitle].waitForExistence(timeout: 2))
+
+        app.staticTexts[originalTitle].tap()
+        let titleField = app.textFields["Title"]
+        XCTAssertTrue(titleField.waitForExistence(timeout: 2))
+        titleField.clearAndTypeText(updatedTitle)
+        app.navigationBars.buttons["Save"].tap()
+
+        XCTAssertTrue(app.staticTexts[updatedTitle].waitForExistence(timeout: 2))
+
+        let updatedCell = app.staticTexts[updatedTitle]
+        XCTAssertTrue(updatedCell.exists)
+        updatedCell.swipeLeft()
+        let deleteButton = app.buttons["Delete"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 2))
+        deleteButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Category deleted."].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts[updatedTitle].waitForNonExistence(timeout: 2))
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+    func testTimerSessionCreatesHistoryEntry() throws {
+        let app = makeApp()
+        app.launch()
+        navigateToTab("Categories", in: app)
+        addCategory(named: "Timer Test", in: app)
+
+        navigateToTab("Session", in: app)
+        XCTAssertTrue(app.buttons["Start Session"].waitForExistence(timeout: 2))
+        app.buttons["Start Session"].tap()
+
+        let stopButton = app.buttons["Stop & Save"]
+        XCTAssertTrue(stopButton.waitForExistence(timeout: 2))
+        stopButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Session saved."].waitForExistence(timeout: 2))
+
+        navigateToTab("History", in: app)
+        XCTAssertTrue(app.staticTexts["Timer • 1m"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testCountCategoryManualEntryUsesCountConversion() throws {
+        let app = makeApp()
+        app.launch()
+        navigateToTab("Categories", in: app)
+        addCategory(
+            named: "Hydration Count",
+            unit: .count,
+            usdPerCount: "2.50",
+            in: app
+        )
+
+        navigateToTab("Session", in: app)
+        app.buttons["session.saveManual"].tap()
+        XCTAssertTrue(app.staticTexts["Manual entry saved."].waitForExistence(timeout: 2))
+
+        navigateToTab("History", in: app)
+        XCTAssertTrue(waitForStaticText(containing: "Manual", in: app, timeout: 6))
+        XCTAssertTrue(waitForStaticText(containing: "1", in: app, timeout: 6))
+        XCTAssertTrue(app.staticTexts["$2.50"].waitForExistence(timeout: 6))
+    }
+
+    @MainActor
+    func testMoneyCategoryManualEntryUsesDirectAmount() throws {
+        let app = makeApp()
+        app.launch()
+        navigateToTab("Categories", in: app)
+        addCategory(
+            named: "Coffee Spend",
+            unit: .money,
+            in: app
+        )
+
+        navigateToTab("Session", in: app)
+        let amountField = app.textFields["session.manualAmount"]
+        XCTAssertTrue(amountField.waitForExistence(timeout: 2))
+        amountField.clearAndTypeText("7.25")
+        app.buttons["session.saveManual"].tap()
+        XCTAssertTrue(app.staticTexts["Manual entry saved."].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
+    func testTimeCategoryHourlyRateManualEntryUsesCustomRate() throws {
+        let app = makeApp()
+        app.launch()
+        navigateToTab("Categories", in: app)
+        addCategory(
+            named: "Deep Work Rate",
+            unit: .time,
+            useHourlyRate: true,
+            hourlyRate: "30",
+            in: app
+        )
+
+        navigateToTab("Session", in: app)
+        XCTAssertTrue(app.buttons["session.start"].exists)
+        app.buttons["session.saveManual"].tap()
+        XCTAssertTrue(app.staticTexts["Manual entry saved."].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
+    private func addCategory(
+        named title: String,
+        unit: TestCategoryUnit = .time,
+        useHourlyRate: Bool = false,
+        hourlyRate: String = "18",
+        usdPerCount: String = "1.00",
+        in app: XCUIApplication
+    ) {
+        app.navigationBars.buttons["Add"].tap()
+        let titleField = app.textFields["categoryEditor.title"]
+        XCTAssertTrue(titleField.waitForExistence(timeout: 2))
+        titleField.tap()
+        titleField.typeText(title)
+
+        if unit != .time {
+            let unitPicker = app.segmentedControls["categoryEditor.unit"]
+            XCTAssertTrue(unitPicker.waitForExistence(timeout: 2))
+            unitPicker.buttons[unit.label].tap()
         }
+
+        if unit == .time, useHourlyRate {
+            let conversionPicker = app.segmentedControls["categoryEditor.timeConversion"]
+            XCTAssertTrue(conversionPicker.waitForExistence(timeout: 2))
+            conversionPicker.buttons["Hourly Rate"].tap()
+
+            let rateField = app.textFields["categoryEditor.rate"]
+            XCTAssertTrue(rateField.waitForExistence(timeout: 2))
+            rateField.clearAndTypeText(hourlyRate)
+        }
+
+        if unit == .count {
+            let countField = app.textFields["categoryEditor.usdPerCount"]
+            XCTAssertTrue(countField.waitForExistence(timeout: 2))
+            countField.clearAndTypeText(usdPerCount)
+        }
+
+        app.navigationBars.buttons["Save"].tap()
+    }
+
+    @MainActor
+    private func navigateToTab(_ tabName: String, in app: XCUIApplication) {
+        let button = app.tabBars.buttons[tabName]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+
+        for _ in 0 ..< 3 {
+            dismissKeyboardIfPresent(in: app)
+
+            if button.isHittable {
+                button.tap()
+            } else {
+                button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+
+            if app.navigationBars[tabName].waitForExistence(timeout: 1) {
+                return
+            }
+        }
+
+        XCTFail("Could not navigate to \(tabName) tab.")
+    }
+
+    @MainActor
+    private func waitForStaticText(
+        containing text: String,
+        in app: XCUIApplication,
+        timeout: TimeInterval
+    ) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", text)
+        let element = app.staticTexts.matching(predicate).firstMatch
+        return element.waitForExistence(timeout: timeout)
+    }
+
+    @MainActor
+    private func dismissKeyboardIfPresent(in app: XCUIApplication) {
+        guard app.keyboards.count > 0 else { return }
+
+        let doneButton = app.toolbars.buttons["Done"]
+        if doneButton.exists && doneButton.isHittable {
+            doneButton.tap()
+            return
+        }
+
+        let returnButton = app.keyboards.buttons["return"]
+        if returnButton.exists && returnButton.isHittable {
+            returnButton.tap()
+            return
+        }
+
+        app.tap()
+    }
+
+    @MainActor
+    private func makeApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ui-testing-reset-store",
+            "-settings.hasCompletedOnboarding",
+            "YES",
+            "-settings.usdPerHour",
+            "18"
+        ]
+        return app
+    }
+}
+
+private extension XCUIElement {
+    @MainActor
+    func clearAndTypeText(_ text: String) {
+        tap()
+
+        guard let currentValue = value as? String else {
+            typeText(text)
+            return
+        }
+
+        let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count)
+        typeText(deleteString + text)
+    }
+
+    @MainActor
+    func waitForNonExistence(timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: self)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }
