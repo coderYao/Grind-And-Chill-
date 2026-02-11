@@ -1030,6 +1030,162 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func syncConflictResolverMergesDuplicateCategoriesAndKeepsEntries() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let firstCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        let duplicateCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            symbolName: "brain.head.profile",
+            iconColor: .blue,
+            unit: .time
+        )
+        let duplicateEntry = Entry(
+            timestamp: Date.now,
+            durationMinutes: 30,
+            amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+            category: duplicateCategory,
+            isManual: false
+        )
+
+        modelContext.insert(firstCategory)
+        modelContext.insert(duplicateCategory)
+        modelContext.insert(duplicateEntry)
+        try modelContext.save()
+
+        let report = try SyncConflictResolverService.resolveConflictsIfNeeded(in: modelContext)
+        let categories = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+
+        #expect(report.categoriesMerged == 1)
+        #expect(report.entriesMerged == 0)
+        #expect(report.badgeAwardsMerged == 0)
+        #expect(categories.count == 1)
+        #expect(entries.count == 1)
+        #expect(entries[0].category?.id == categories[0].id)
+    }
+
+    @Test
+    @MainActor
+    func syncConflictResolverDeduplicatesEntriesAndBadges() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Reading",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+        modelContext.insert(category)
+
+        let sharedTimestamp = Date.now
+        let duplicateEntryA = Entry(
+            timestamp: sharedTimestamp,
+            durationMinutes: 25,
+            amountUSD: Decimal(string: "7.50") ?? .zeroValue,
+            category: category,
+            note: "manual sync duplicate",
+            isManual: true
+        )
+        let duplicateEntryB = Entry(
+            timestamp: sharedTimestamp,
+            durationMinutes: 25,
+            amountUSD: Decimal(string: "7.50") ?? .zeroValue,
+            category: category,
+            note: "manual sync duplicate",
+            isManual: true
+        )
+        let uniqueEntry = Entry(
+            timestamp: sharedTimestamp.addingTimeInterval(60),
+            durationMinutes: 10,
+            amountUSD: Decimal(string: "3.00") ?? .zeroValue,
+            category: category,
+            note: "unique",
+            isManual: false
+        )
+
+        modelContext.insert(duplicateEntryA)
+        modelContext.insert(duplicateEntryB)
+        modelContext.insert(uniqueEntry)
+
+        let duplicateAwardA = BadgeAward(awardKey: "streak:reading:3:2026-02-11", dateAwarded: Date.now)
+        let duplicateAwardB = BadgeAward(awardKey: "streak:reading:3:2026-02-11", dateAwarded: Date.now.addingTimeInterval(-10))
+        let uniqueAward = BadgeAward(awardKey: "streak:reading:7:2026-02-11", dateAwarded: Date.now)
+
+        modelContext.insert(duplicateAwardA)
+        modelContext.insert(duplicateAwardB)
+        modelContext.insert(uniqueAward)
+        try modelContext.save()
+
+        let report = try SyncConflictResolverService.resolveConflictsIfNeeded(in: modelContext)
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        let awards = try modelContext.fetch(FetchDescriptor<BadgeAward>())
+
+        #expect(report.entriesMerged == 1)
+        #expect(report.badgeAwardsMerged == 1)
+        #expect(entries.count == 2)
+        #expect(awards.count == 2)
+    }
+
+    @Test
+    @MainActor
+    func syncMonitorRestoresPersistedHistoryOnInit() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let importDate = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let exportDate = Date(timeIntervalSinceReferenceDate: 1_000_300)
+
+        modelContext.insert(
+            SyncEventHistory(
+                eventIdentifier: UUID().uuidString,
+                kindRaw: SyncMonitor.EventRecord.EventKind.importData.rawValue,
+                outcomeRaw: "success",
+                startedAt: importDate.addingTimeInterval(-5),
+                endedAt: importDate,
+                detail: nil,
+                recordedAt: importDate
+            )
+        )
+        modelContext.insert(
+            SyncEventHistory(
+                eventIdentifier: UUID().uuidString,
+                kindRaw: SyncMonitor.EventRecord.EventKind.exportData.rawValue,
+                outcomeRaw: "success",
+                startedAt: exportDate.addingTimeInterval(-5),
+                endedAt: exportDate,
+                detail: nil,
+                recordedAt: exportDate
+            )
+        )
+        try modelContext.save()
+
+        let monitor = SyncMonitor(cloudKitEnabled: true, modelContext: modelContext)
+
+        #expect(monitor.lastImportDate == importDate)
+        #expect(monitor.lastExportDate == exportDate)
+        #expect(monitor.recentEvents.count == 2)
+
+        if case let .upToDate(lastSync) = monitor.status {
+            #expect(lastSync == exportDate)
+        } else {
+            Issue.record("SyncMonitor should report up-to-date after restoring persisted sync history.")
+        }
+    }
+
+    @Test
+    @MainActor
     func onboardingCompletionRespectsStarterToggle() throws {
         let container = try makeInMemoryContainer()
         let modelContext = ModelContext(container)
@@ -1080,7 +1236,8 @@ struct Grind_N_ChillTests {
         let schema = Schema([
             Grind_N_Chill.Category.self,
             Entry.self,
-            BadgeAward.self
+            BadgeAward.self,
+            SyncEventHistory.self
         ])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])

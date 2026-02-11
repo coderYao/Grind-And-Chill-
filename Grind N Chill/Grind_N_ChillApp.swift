@@ -7,9 +7,19 @@ import UIKit
 @main
 struct Grind_N_ChillApp: App {
     @State private var timerManager = TimerManager()
-    private let sharedContainer = ModelContainerFactory.makeSharedContainer()
-    
+    @State private var syncMonitor: SyncMonitor
+    private let sharedContainer: ModelContainer
+
     init() {
+        let cloudKitEnabled = ModelContainerFactory.isCloudKitEnabledForCurrentLaunch()
+        sharedContainer = ModelContainerFactory.makeSharedContainer()
+        _syncMonitor = State(
+            initialValue: SyncMonitor(
+                cloudKitEnabled: cloudKitEnabled,
+                modelContext: sharedContainer.mainContext
+            )
+        )
+
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-disable-animations") {
             UIView.setAnimationsEnabled(false)
@@ -27,6 +37,7 @@ struct Grind_N_ChillApp: App {
         WindowGroup {
             ContentView()
                 .environment(timerManager)
+                .environment(syncMonitor)
         }
         .modelContainer(sharedContainer)
     }
