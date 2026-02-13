@@ -4,6 +4,300 @@ import CoreData
 import CloudKit
 import SwiftData
 
+enum GrindNChillSchemaV1: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(1, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [Category.self, Entry.self, BadgeAward.self, SyncEventHistory.self]
+    }
+
+    @Model
+    final class Category {
+        var id: UUID = UUID()
+        var title: String = ""
+        var multiplier: Double = 1.0
+        var type: CategoryType?
+        var unit: CategoryUnit?
+        var timeConversionMode: TimeConversionMode?
+        var hourlyRateUSD: Double?
+        var usdPerCount: Double?
+        var dailyGoalMinutes: Int = 0
+        var streakEnabled: Bool?
+        var badgeEnabled: Bool?
+        var badgeMilestones: String?
+        var streakBonusEnabled: Bool?
+        var streakBonusAmountUSD: Double?
+        var streakBonusSchedule: String?
+        var symbolName: String?
+        var iconColor: CategoryIconColor?
+        @Relationship(deleteRule: .cascade, inverse: \Entry.category) var entries: [Entry]?
+
+        init(
+            id: UUID = UUID(),
+            title: String = "",
+            multiplier: Double = 1.0,
+            type: CategoryType? = nil,
+            unit: CategoryUnit? = nil,
+            timeConversionMode: TimeConversionMode? = nil,
+            hourlyRateUSD: Double? = nil,
+            usdPerCount: Double? = nil,
+            dailyGoalMinutes: Int = 0,
+            streakEnabled: Bool? = nil,
+            badgeEnabled: Bool? = nil,
+            badgeMilestones: String? = nil,
+            streakBonusEnabled: Bool? = nil,
+            streakBonusAmountUSD: Double? = nil,
+            streakBonusSchedule: String? = nil,
+            symbolName: String? = nil,
+            iconColor: CategoryIconColor? = nil,
+            entries: [Entry]? = nil
+        ) {
+            self.id = id
+            self.title = title
+            self.multiplier = multiplier
+            self.type = type
+            self.unit = unit
+            self.timeConversionMode = timeConversionMode
+            self.hourlyRateUSD = hourlyRateUSD
+            self.usdPerCount = usdPerCount
+            self.dailyGoalMinutes = dailyGoalMinutes
+            self.streakEnabled = streakEnabled
+            self.badgeEnabled = badgeEnabled
+            self.badgeMilestones = badgeMilestones
+            self.streakBonusEnabled = streakBonusEnabled
+            self.streakBonusAmountUSD = streakBonusAmountUSD
+            self.streakBonusSchedule = streakBonusSchedule
+            self.symbolName = symbolName
+            self.iconColor = iconColor
+            self.entries = entries
+        }
+    }
+
+    @Model
+    final class Entry {
+        var id: UUID = UUID()
+        var timestamp: Date = Date.now
+        var durationMinutes: Int = 0
+        var amountUSD: Decimal = 0
+        var quantity: Decimal?
+        var unit: CategoryUnit?
+        var note: String = ""
+        var bonusKey: String?
+        var isManual: Bool = false
+        var category: Category?
+
+        init(
+            id: UUID = UUID(),
+            timestamp: Date = Date.now,
+            durationMinutes: Int = 0,
+            amountUSD: Decimal = 0,
+            quantity: Decimal? = nil,
+            unit: CategoryUnit? = nil,
+            note: String = "",
+            bonusKey: String? = nil,
+            isManual: Bool = false,
+            category: Category? = nil
+        ) {
+            self.id = id
+            self.timestamp = timestamp
+            self.durationMinutes = durationMinutes
+            self.amountUSD = amountUSD
+            self.quantity = quantity
+            self.unit = unit
+            self.note = note
+            self.bonusKey = bonusKey
+            self.isManual = isManual
+            self.category = category
+        }
+    }
+
+    @Model
+    final class BadgeAward {
+        var awardKey: String = ""
+        var dateAwarded: Date = Date.now
+
+        init(
+            awardKey: String = "",
+            dateAwarded: Date = Date.now
+        ) {
+            self.awardKey = awardKey
+            self.dateAwarded = dateAwarded
+        }
+    }
+
+    @Model
+    final class SyncEventHistory {
+        var id: UUID = UUID()
+        var eventIdentifier: String = ""
+        var kindRaw: String = ""
+        var outcomeRaw: String = ""
+        var startedAt: Date = Date.now
+        var endedAt: Date?
+        var detail: String?
+
+        init(
+            id: UUID = UUID(),
+            eventIdentifier: String = "",
+            kindRaw: String = "",
+            outcomeRaw: String = "",
+            startedAt: Date = Date.now,
+            endedAt: Date? = nil,
+            detail: String? = nil
+        ) {
+            self.id = id
+            self.eventIdentifier = eventIdentifier
+            self.kindRaw = kindRaw
+            self.outcomeRaw = outcomeRaw
+            self.startedAt = startedAt
+            self.endedAt = endedAt
+            self.detail = detail
+        }
+    }
+}
+
+enum GrindNChillSchemaV2: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(2, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [Category.self, Entry.self, BadgeAward.self, SyncEventHistory.self]
+    }
+}
+
+enum GrindNChillMigrationPlan: SchemaMigrationPlan {
+    static var schemas: [any VersionedSchema.Type] {
+        [GrindNChillSchemaV1.self, GrindNChillSchemaV2.self]
+    }
+
+    static var stages: [MigrationStage] {
+        [
+            .custom(
+                fromVersion: GrindNChillSchemaV1.self,
+                toVersion: GrindNChillSchemaV2.self,
+                willMigrate: nil,
+                didMigrate: { context in
+                    try applyPostMigrationDefaults(in: context)
+                }
+            )
+        ]
+    }
+
+    private static func applyPostMigrationDefaults(in context: ModelContext) throws {
+        let categories = try context.fetch(FetchDescriptor<Category>())
+        for category in categories {
+            let trimmedTitle = category.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedTitle.isEmpty {
+                category.title = "Category"
+            } else if trimmedTitle != category.title {
+                category.title = trimmedTitle
+            }
+
+            if category.multiplier <= 0 {
+                category.multiplier = 1.0
+            }
+            if category.dailyGoalMinutes < 0 {
+                category.dailyGoalMinutes = 0
+            }
+
+            if category.type == nil {
+                category.type = .goodHabit
+            }
+            if category.unit == nil {
+                category.unit = .time
+            }
+
+            let resolvedType = category.type ?? .goodHabit
+            if category.symbolName?.isEmpty != false {
+                category.symbolName = CategorySymbolCatalog.defaultSymbol(for: resolvedType)
+            }
+            if category.iconColor == nil {
+                category.iconColor = CategoryIconColor.defaultColor(for: resolvedType)
+            }
+
+            if category.streakEnabled == nil {
+                category.streakEnabled = true
+            }
+            if category.badgeEnabled == nil {
+                category.badgeEnabled = true
+            }
+            if category.streakBonusEnabled == nil {
+                category.streakBonusEnabled = false
+            }
+
+            let resolvedUnit = category.unit ?? .time
+            switch resolvedUnit {
+            case .time:
+                if category.timeConversionMode == nil {
+                    category.timeConversionMode = .multiplier
+                }
+            case .money, .count:
+                category.timeConversionMode = nil
+                category.hourlyRateUSD = nil
+            }
+
+            if let usdPerCount = category.usdPerCount, usdPerCount <= 0 {
+                category.usdPerCount = nil
+            }
+            if let hourlyRateUSD = category.hourlyRateUSD, hourlyRateUSD <= 0 {
+                category.hourlyRateUSD = nil
+            }
+            if let streakBonusAmountUSD = category.streakBonusAmountUSD, streakBonusAmountUSD <= 0 {
+                category.streakBonusAmountUSD = nil
+            }
+        }
+
+        let entries = try context.fetch(FetchDescriptor<Entry>())
+        for entry in entries {
+            if entry.unit == nil {
+                if let category = entry.category {
+                    entry.unit = category.resolvedUnit
+                } else if entry.durationMinutes > 0 {
+                    entry.unit = .time
+                } else {
+                    entry.unit = .money
+                }
+            }
+
+            if entry.quantity == nil {
+                switch entry.unit ?? .money {
+                case .time, .count:
+                    entry.quantity = Decimal(max(0, entry.durationMinutes))
+                case .money:
+                    entry.quantity = entry.amountUSD < .zeroValue ? (entry.amountUSD * Decimal(-1)) : entry.amountUSD
+                }
+            }
+        }
+
+        let badgeAwards = try context.fetch(FetchDescriptor<BadgeAward>())
+        for award in badgeAwards {
+            let trimmedAwardKey = award.awardKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            award.awardKey = trimmedAwardKey.isEmpty ? "badge:\(UUID().uuidString)" : trimmedAwardKey
+        }
+
+        let syncEvents = try context.fetch(FetchDescriptor<SyncEventHistory>())
+        for event in syncEvents {
+            let trimmedEventIdentifier = event.eventIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            event.eventIdentifier = trimmedEventIdentifier.isEmpty ? UUID().uuidString : trimmedEventIdentifier
+            if event.kindRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                event.kindRaw = "Sync"
+            }
+            if event.outcomeRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                event.outcomeRaw = "inProgress"
+            }
+            if event.recordedAt < event.startedAt {
+                event.recordedAt = event.endedAt ?? event.startedAt
+            }
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+    }
+}
+
 enum ModelContainerFactory {
     static func isCloudKitEnabledForCurrentLaunch() -> Bool {
         shouldUseCloudKit()
@@ -42,7 +336,6 @@ enum ModelContainerFactory {
     }
 
     private static func makeContainer(cloudKitEnabled: Bool) throws -> ModelContainer {
-        let schema = Schema([Category.self, Entry.self, BadgeAward.self, SyncEventHistory.self])
         let configuration: ModelConfiguration
 
         if cloudKitEnabled {
@@ -51,7 +344,13 @@ enum ModelContainerFactory {
             configuration = ModelConfiguration()
         }
 
-        return try ModelContainer(for: schema, configurations: [configuration])
+        let schema = Schema(versionedSchema: GrindNChillSchemaV2.self)
+
+        return try ModelContainer(
+            for: schema,
+            migrationPlan: GrindNChillMigrationPlan.self,
+            configurations: [configuration]
+        )
     }
 
     private static func shouldUseCloudKit() -> Bool {
