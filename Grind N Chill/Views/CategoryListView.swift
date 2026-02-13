@@ -25,6 +25,17 @@ struct CategoryListView: View {
                 }
             }
 
+            if viewModel.canUndoLastDeletion {
+                Section {
+                    Button {
+                        viewModel.undoLastDeletedCategories(in: modelContext)
+                    } label: {
+                        Label("Undo Last Delete", systemImage: "arrow.uturn.backward")
+                    }
+                    .accessibilityIdentifier("categories.undoDelete")
+                }
+            }
+
             Section("Your Categories") {
                 if categories.isEmpty {
                     Text("No categories yet.")

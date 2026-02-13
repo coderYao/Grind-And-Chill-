@@ -585,6 +585,100 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func historyDateRangeLast7DaysFiltersOutOlderEntries() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let now = date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 4, hour: 18, minute: 0, calendar: calendar),
+                durationMinutes: 20,
+                amountUSD: Decimal(string: "6.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        viewModel.dateRangeFilter = .last7Days
+        let filtered = viewModel.filteredEntries(from: entries, now: now, calendar: calendar)
+
+        #expect(filtered.count == 1)
+        #expect(filtered[0].timestamp == date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar))
+    }
+
+    @Test
+    @MainActor
+    func historyDateRangeCustomUsesInclusiveDayBounds() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "General",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 9, hour: 23, minute: 59, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "5.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 0, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "7.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 23, minute: 59, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "8.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 12, hour: 0, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        viewModel.dateRangeFilter = .custom
+        viewModel.customStartDate = date(year: 2026, month: 2, day: 10, hour: 8, minute: 0, calendar: calendar)
+        viewModel.customEndDate = date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar)
+
+        let filtered = viewModel.filteredEntries(from: entries, calendar: calendar)
+        #expect(filtered.count == 2)
+        #expect(filtered.contains(where: { $0.timestamp == date(year: 2026, month: 2, day: 10, hour: 0, minute: 0, calendar: calendar) }))
+        #expect(filtered.contains(where: { $0.timestamp == date(year: 2026, month: 2, day: 11, hour: 23, minute: 59, calendar: calendar) }))
+    }
+
+    @Test
+    @MainActor
     func historyChartPointsAreChronologicalAndSignedForBars() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -631,6 +725,526 @@ struct Grind_N_ChillTests {
         #expect(points[1].spent == 3.0)
         #expect(points[1].spentAsNegative == -3.0)
         #expect(points[1].ledgerChange == 5.0)
+    }
+
+    @Test
+    @MainActor
+    func historyDailySummaryCSVExportIncludesExpectedColumns() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "8.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-2.50") ?? .zeroValue,
+                category: category,
+                isManual: true,
+                quantity: Decimal(string: "2.50"),
+                unit: .money
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        let summaries = viewModel.dailySummaries(from: entries, calendar: calendar)
+        let csv = viewModel.dailySummaryCSV(from: summaries, calendar: calendar)
+        let rows = csv.split(separator: "\n")
+
+        #expect(rows.count == 2)
+        #expect(rows[0] == "date,ledgerChangeUSD,gainUSD,spentUSD,entryCount")
+        #expect(rows[1] == "2026-02-11,5.5,8,2.5,2")
+    }
+
+    @Test
+    @MainActor
+    func historyJSONExportEncodesDailySummariesAndEntries() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "Snacks",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-4.50") ?? .zeroValue,
+                category: category,
+                note: "Afternoon snack",
+                isManual: true,
+                quantity: Decimal(string: "4.50"),
+                unit: .money
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        let summaries = viewModel.dailySummaries(from: entries, calendar: calendar)
+        let json = try viewModel.exportJSON(from: summaries, manualOnlyFilter: true, calendar: calendar)
+        let data = Data(json.utf8)
+        let payload = try JSONDecoder().decode(HistoryViewModel.ExportPayload.self, from: data)
+
+        #expect(payload.manualOnlyFilter == true)
+        #expect(payload.dateRangeFilter == HistoryViewModel.DateRangeFilter.all.rawValue)
+        #expect(payload.dailySummaries.count == 1)
+        #expect(payload.entries.count == 1)
+        #expect(payload.dailySummaries[0].date == "2026-02-11")
+        #expect(payload.dailySummaries[0].ledgerChangeUSD == "-4.5")
+        #expect(payload.entries[0].categoryTitle == "Snacks")
+        #expect(payload.entries[0].unit == CategoryUnit.money.rawValue)
+        #expect(payload.entries[0].isManual == true)
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportPreviewReportsCreateUpdateAndSkippedCounts() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let existingCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(existingCategory)
+
+        let existingID = UUID(uuidString: "44444444-4444-4444-4444-444444444444") ?? UUID()
+        let existingEntry = Entry(
+            id: existingID,
+            timestamp: Date(timeIntervalSinceReferenceDate: 20_000),
+            durationMinutes: 30,
+            amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+            category: existingCategory,
+            note: "Existing",
+            isManual: false
+        )
+        modelContext.insert(existingEntry)
+        try modelContext.save()
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "44444444-4444-4444-4444-444444444444",
+              "timestamp": "2026-02-13T12:00:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "45",
+              "durationMinutes": 45,
+              "amountUSD": "13.50",
+              "isManual": true,
+              "note": "Will update"
+            },
+            {
+              "id": "55555555-5555-5555-5555-555555555555",
+              "timestamp": "2026-02-13T12:30:00Z",
+              "categoryTitle": "Coffee",
+              "categoryType": "quitHabit",
+              "unit": "money",
+              "quantity": "4.00",
+              "durationMinutes": 0,
+              "amountUSD": "4.00",
+              "isManual": true,
+              "note": "Will create"
+            },
+            {
+              "id": "not-a-uuid",
+              "timestamp": "2026-02-13T13:00:00Z",
+              "categoryTitle": "Ignore",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "10",
+              "durationMinutes": 10,
+              "amountUSD": "3.00",
+              "isManual": false,
+              "note": "Invalid ID"
+            }
+          ]
+        }
+        """
+
+        let preview = try HistoryImportService.previewJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext
+        )
+
+        #expect(preview.processedEntries == 3)
+        #expect(preview.entriesToCreate == 1)
+        #expect(preview.entriesToUpdate == 1)
+        #expect(preview.categoriesToCreate == 1)
+        #expect(preview.skippedEntries == 1)
+        #expect(preview.hasChanges == true)
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportPreviewTreatsDuplicatePayloadIDAsCreateThenUpdate() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "66666666-6666-6666-6666-666666666666",
+              "timestamp": "2026-02-13T10:00:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "20",
+              "durationMinutes": 20,
+              "amountUSD": "6.00",
+              "isManual": false,
+              "note": "First"
+            },
+            {
+              "id": "66666666-6666-6666-6666-666666666666",
+              "timestamp": "2026-02-13T11:00:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "25",
+              "durationMinutes": 25,
+              "amountUSD": "7.50",
+              "isManual": true,
+              "note": "Second"
+            }
+          ]
+        }
+        """
+
+        let preview = try HistoryImportService.previewJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext
+        )
+
+        #expect(preview.processedEntries == 2)
+        #expect(preview.entriesToCreate == 1)
+        #expect(preview.entriesToUpdate == 1)
+        #expect(preview.categoriesToCreate == 1)
+        #expect(preview.skippedEntries == 0)
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportCreatesEntriesAndNormalizesChillAmounts() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "11111111-1111-1111-1111-111111111111",
+              "timestamp": "2026-02-13T18:10:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "45",
+              "durationMinutes": 45,
+              "amountUSD": "13.50",
+              "isManual": false,
+              "note": "Focus block"
+            },
+            {
+              "id": "22222222-2222-2222-2222-222222222222",
+              "timestamp": "2026-02-13T19:00:00Z",
+              "categoryTitle": "Snacks",
+              "categoryType": "quitHabit",
+              "unit": "money",
+              "quantity": "6.25",
+              "durationMinutes": 0,
+              "amountUSD": "6.25",
+              "isManual": true,
+              "note": "Late snack"
+            }
+          ]
+        }
+        """
+
+        let report = try HistoryImportService.importJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext
+        )
+        #expect(report.processedEntries == 2)
+        #expect(report.createdEntries == 2)
+        #expect(report.updatedEntries == 0)
+        #expect(report.skippedEntries == 0)
+        #expect(report.createdCategories == 2)
+
+        let categories = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        #expect(categories.count == 2)
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entries.count == 2)
+
+        guard let chillEntry = entries.first(where: { $0.id.uuidString == "22222222-2222-2222-2222-222222222222" }) else {
+            Issue.record("Expected imported chill entry.")
+            return
+        }
+
+        #expect(chillEntry.amountUSD == (Decimal(string: "-6.25") ?? .zeroValue))
+        #expect(chillEntry.resolvedQuantity == (Decimal(string: "6.25") ?? .zeroValue))
+        #expect(chillEntry.resolvedUnit == .money)
+        #expect(chillEntry.category?.resolvedType == .quitHabit)
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportUpsertsExistingEntriesByID() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(category)
+
+        let existingID = UUID(uuidString: "33333333-3333-3333-3333-333333333333") ?? UUID()
+        let existingEntry = Entry(
+            id: existingID,
+            timestamp: Date(timeIntervalSinceReferenceDate: 10_000),
+            durationMinutes: 20,
+            amountUSD: Decimal(string: "6.00") ?? .zeroValue,
+            category: category,
+            note: "Old note",
+            isManual: false,
+            quantity: Decimal(20),
+            unit: .time
+        )
+        modelContext.insert(existingEntry)
+        try modelContext.save()
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "33333333-3333-3333-3333-333333333333",
+              "timestamp": "2026-02-13T21:30:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "35",
+              "durationMinutes": 35,
+              "amountUSD": "10.50",
+              "isManual": true,
+              "note": "Updated note"
+            }
+          ]
+        }
+        """
+
+        let report = try HistoryImportService.importJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext
+        )
+        #expect(report.processedEntries == 1)
+        #expect(report.createdEntries == 0)
+        #expect(report.updatedEntries == 1)
+        #expect(report.skippedEntries == 0)
+        #expect(report.createdCategories == 0)
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entries.count == 1)
+        #expect(entries[0].id == existingID)
+        #expect(entries[0].durationMinutes == 35)
+        #expect(entries[0].amountUSD == (Decimal(string: "10.5") ?? .zeroValue))
+        #expect(entries[0].isManual == true)
+        #expect(entries[0].note == "Updated note")
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportKeepExistingPolicySkipsConflictingEntries() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(category)
+
+        let existingID = UUID(uuidString: "77777777-7777-7777-7777-777777777777") ?? UUID()
+        let existingEntry = Entry(
+            id: existingID,
+            timestamp: Date(timeIntervalSinceReferenceDate: 50_000),
+            durationMinutes: 20,
+            amountUSD: Decimal(string: "6.00") ?? .zeroValue,
+            category: category,
+            note: "Keep me",
+            isManual: false,
+            quantity: Decimal(20),
+            unit: .time
+        )
+        modelContext.insert(existingEntry)
+        try modelContext.save()
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "77777777-7777-7777-7777-777777777777",
+              "timestamp": "2026-02-13T22:30:00Z",
+              "categoryTitle": "Brand New Category",
+              "categoryType": "quitHabit",
+              "unit": "money",
+              "quantity": "10.50",
+              "durationMinutes": 0,
+              "amountUSD": "10.50",
+              "isManual": true,
+              "note": "Should be ignored"
+            }
+          ]
+        }
+        """
+
+        let report = try HistoryImportService.importJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext,
+            conflictPolicy: .keepExisting
+        )
+        #expect(report.processedEntries == 1)
+        #expect(report.createdEntries == 0)
+        #expect(report.updatedEntries == 0)
+        #expect(report.skippedEntries == 1)
+        #expect(report.createdCategories == 0)
+
+        let entries = try modelContext.fetch(FetchDescriptor<Entry>())
+        let categories = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        #expect(entries.count == 1)
+        #expect(categories.count == 1)
+        #expect(entries[0].id == existingID)
+        #expect(entries[0].durationMinutes == 20)
+        #expect(entries[0].amountUSD == (Decimal(string: "6.0") ?? .zeroValue))
+        #expect(entries[0].isManual == false)
+        #expect(entries[0].note == "Keep me")
+    }
+
+    @Test
+    @MainActor
+    func historyJSONImportUndoRevertsCreatedAndUpdatedRecords() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let existingCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(existingCategory)
+
+        let existingID = UUID(uuidString: "88888888-8888-8888-8888-888888888888") ?? UUID()
+        let originalTimestamp = Date(timeIntervalSinceReferenceDate: 70_000)
+        let existingEntry = Entry(
+            id: existingID,
+            timestamp: originalTimestamp,
+            durationMinutes: 20,
+            amountUSD: Decimal(string: "6.00") ?? .zeroValue,
+            category: existingCategory,
+            note: "Original",
+            isManual: false,
+            quantity: Decimal(20),
+            unit: .time
+        )
+        modelContext.insert(existingEntry)
+        try modelContext.save()
+
+        let payload = """
+        {
+          "entries": [
+            {
+              "id": "88888888-8888-8888-8888-888888888888",
+              "timestamp": "2026-02-13T09:30:00Z",
+              "categoryTitle": "Deep Work",
+              "categoryType": "goodHabit",
+              "unit": "time",
+              "quantity": "40",
+              "durationMinutes": 40,
+              "amountUSD": "12.00",
+              "isManual": true,
+              "note": "Updated"
+            },
+            {
+              "id": "99999999-9999-9999-9999-999999999999",
+              "timestamp": "2026-02-13T11:00:00Z",
+              "categoryTitle": "Coffee",
+              "categoryType": "quitHabit",
+              "unit": "money",
+              "quantity": "5.50",
+              "durationMinutes": 0,
+              "amountUSD": "5.50",
+              "isManual": true,
+              "note": "Created"
+            }
+          ]
+        }
+        """
+
+        let importReport = try HistoryImportService.importJSON(
+            data: Data(payload.utf8),
+            modelContext: modelContext
+        )
+        #expect(importReport.createdEntries == 1)
+        #expect(importReport.updatedEntries == 1)
+        #expect(importReport.createdCategories == 1)
+        #expect(importReport.undoPayload != nil)
+
+        guard let undoPayload = importReport.undoPayload else {
+            Issue.record("Expected undo payload after import.")
+            return
+        }
+
+        let undoReport = try HistoryImportService.undoImport(undoPayload, modelContext: modelContext)
+        #expect(undoReport.removedCreatedEntries == 1)
+        #expect(undoReport.revertedUpdatedEntries == 1)
+        #expect(undoReport.removedCreatedCategories == 1)
+        #expect(undoReport.missingRecords == 0)
+
+        let categoriesAfterUndo = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        #expect(categoriesAfterUndo.count == 1)
+        #expect(categoriesAfterUndo[0].title == "Deep Work")
+
+        let entriesAfterUndo = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entriesAfterUndo.count == 1)
+        #expect(entriesAfterUndo[0].id == existingID)
+        #expect(entriesAfterUndo[0].timestamp == originalTimestamp)
+        #expect(entriesAfterUndo[0].durationMinutes == 20)
+        #expect(entriesAfterUndo[0].amountUSD == (Decimal(string: "6.0") ?? .zeroValue))
+        #expect(entriesAfterUndo[0].note == "Original")
+        #expect(entriesAfterUndo[0].isManual == false)
+        #expect(entriesAfterUndo[0].unit == .time)
+        #expect(entriesAfterUndo[0].category?.id == existingCategory.id)
     }
 
     @Test
@@ -880,6 +1494,100 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func deletingCategoryCanBeUndoneWithEntries() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let deepWork = Category(
+            title: "Deep Work",
+            multiplier: 1.2,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            symbolName: "brain.head.profile",
+            iconColor: .blue,
+            unit: .time
+        )
+        let reading = Category(
+            title: "Reading",
+            multiplier: 1.1,
+            type: .goodHabit,
+            dailyGoalMinutes: 45,
+            symbolName: "book.fill",
+            unit: .time
+        )
+        modelContext.insert(deepWork)
+        modelContext.insert(reading)
+
+        let deletedEntryID = UUID()
+        modelContext.insert(
+            Entry(
+                id: deletedEntryID,
+                timestamp: Date(timeIntervalSinceReferenceDate: 90_000),
+                durationMinutes: 40,
+                amountUSD: Decimal(string: "12.00") ?? .zeroValue,
+                category: deepWork,
+                note: "Restore me",
+                bonusKey: "bonus:1",
+                isManual: true,
+                quantity: Decimal(40),
+                unit: .time
+            )
+        )
+        modelContext.insert(
+            Entry(
+                timestamp: Date(timeIntervalSinceReferenceDate: 90_100),
+                durationMinutes: 20,
+                amountUSD: Decimal(string: "6.00") ?? .zeroValue,
+                category: reading,
+                isManual: false
+            )
+        )
+        try modelContext.save()
+
+        let viewModel = CategoriesViewModel()
+        viewModel.deleteCategories(
+            at: IndexSet(integer: 0),
+            from: [deepWork, reading],
+            modelContext: modelContext,
+            activeCategoryID: nil
+        )
+
+        #expect(viewModel.canUndoLastDeletion == true)
+
+        let categoriesAfterDelete = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        let entriesAfterDelete = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(categoriesAfterDelete.count == 1)
+        #expect(entriesAfterDelete.count == 1)
+        #expect(categoriesAfterDelete[0].title == "Reading")
+
+        viewModel.undoLastDeletedCategories(in: modelContext)
+        #expect(viewModel.canUndoLastDeletion == false)
+
+        let categoriesAfterUndo = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        let entriesAfterUndo = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(categoriesAfterUndo.count == 2)
+        #expect(entriesAfterUndo.count == 2)
+
+        guard let restoredCategory = categoriesAfterUndo.first(where: { $0.id == deepWork.id }) else {
+            Issue.record("Expected deleted category to be restored.")
+            return
+        }
+        #expect(restoredCategory.title == "Deep Work")
+        #expect(restoredCategory.resolvedIconColor == .blue)
+
+        guard let restoredEntry = entriesAfterUndo.first(where: { $0.id == deletedEntryID }) else {
+            Issue.record("Expected deleted entry to be restored.")
+            return
+        }
+        #expect(restoredEntry.category?.id == deepWork.id)
+        #expect(restoredEntry.note == "Restore me")
+        #expect(restoredEntry.bonusKey == "bonus:1")
+        #expect(restoredEntry.durationMinutes == 40)
+        #expect(restoredEntry.amountUSD == (Decimal(string: "12.0") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
     func creatingAndEditingCategoryPersists() throws {
         let container = try makeInMemoryContainer()
         let modelContext = ModelContext(container)
@@ -1026,6 +1734,146 @@ struct Grind_N_ChillTests {
         #expect(fetched[0].resolvedBadgeEnabled == true)
         #expect(fetched[0].resolvedStreakBonusEnabled == false)
         #expect(fetched[0].symbolName == CategorySymbolCatalog.defaultSymbol(for: .goodHabit))
+    }
+
+    @Test
+    @MainActor
+    func migrationBackfillRepairsEntriesBadgesAndSyncEvents() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let chillCategory = Category(
+            title: "Coffee",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 10,
+            unit: .money
+        )
+        modelContext.insert(chillCategory)
+
+        let chillEntry = Entry(
+            timestamp: Date(timeIntervalSinceReferenceDate: 2_000),
+            durationMinutes: -5,
+            amountUSD: Decimal(string: "7.50") ?? .zeroValue,
+            category: chillCategory,
+            note: "  Chill note  ",
+            bonusKey: "   ",
+            isManual: true,
+            quantity: Decimal(-1),
+            unit: nil
+        )
+        let timedEntry = Entry(
+            timestamp: Date(timeIntervalSinceReferenceDate: 2_100),
+            durationMinutes: 12,
+            amountUSD: Decimal(string: "3.00") ?? .zeroValue,
+            category: nil,
+            note: "  ",
+            isManual: false,
+            quantity: nil,
+            unit: nil
+        )
+        modelContext.insert(chillEntry)
+        modelContext.insert(timedEntry)
+
+        let olderAwardDate = Date(timeIntervalSinceReferenceDate: 3_000)
+        let newerAwardDate = Date(timeIntervalSinceReferenceDate: 3_100)
+        modelContext.insert(
+            BadgeAward(
+                awardKey: " streak:coffee:3:2026-02-13 ",
+                dateAwarded: newerAwardDate
+            )
+        )
+        modelContext.insert(
+            BadgeAward(
+                awardKey: "streak:coffee:3:2026-02-13",
+                dateAwarded: olderAwardDate
+            )
+        )
+
+        let startedAt = Date(timeIntervalSinceReferenceDate: 4_000)
+        modelContext.insert(
+            SyncEventHistory(
+                eventIdentifier: "event-dup",
+                kindRaw: "Import",
+                outcomeRaw: "success",
+                startedAt: startedAt,
+                endedAt: startedAt.addingTimeInterval(10),
+                detail: nil,
+                recordedAt: startedAt.addingTimeInterval(10)
+            )
+        )
+        modelContext.insert(
+            SyncEventHistory(
+                eventIdentifier: "event-dup",
+                kindRaw: "Export",
+                outcomeRaw: "success",
+                startedAt: startedAt.addingTimeInterval(20),
+                endedAt: startedAt.addingTimeInterval(30),
+                detail: "latest",
+                recordedAt: startedAt.addingTimeInterval(40)
+            )
+        )
+        modelContext.insert(
+            SyncEventHistory(
+                eventIdentifier: "event-needs-normalization",
+                kindRaw: " ",
+                outcomeRaw: " ",
+                startedAt: startedAt.addingTimeInterval(60),
+                endedAt: startedAt.addingTimeInterval(30),
+                detail: "   ",
+                recordedAt: startedAt.addingTimeInterval(20)
+            )
+        )
+
+        try modelContext.save()
+        try GrindNChillMigrationPlan.applyPostMigrationDefaultsForTesting(in: modelContext)
+
+        let repairedEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(repairedEntries.count == 2)
+
+        guard let repairedChillEntry = repairedEntries.first(where: { $0.id == chillEntry.id }) else {
+            Issue.record("Expected repaired chill entry to exist.")
+            return
+        }
+        #expect(repairedChillEntry.durationMinutes == 0)
+        #expect(repairedChillEntry.note == "Chill note")
+        #expect(repairedChillEntry.bonusKey == nil)
+        #expect(repairedChillEntry.unit == .money)
+        #expect(repairedChillEntry.amountUSD == (Decimal(string: "-7.50") ?? .zeroValue))
+        #expect(repairedChillEntry.quantity == (Decimal(string: "7.50") ?? .zeroValue))
+
+        guard let repairedTimedEntry = repairedEntries.first(where: { $0.id == timedEntry.id }) else {
+            Issue.record("Expected repaired timed entry to exist.")
+            return
+        }
+        #expect(repairedTimedEntry.unit == .time)
+        #expect(repairedTimedEntry.quantity == Decimal(12))
+        #expect(repairedTimedEntry.note.isEmpty)
+
+        let repairedAwards = try modelContext.fetch(FetchDescriptor<BadgeAward>())
+        #expect(repairedAwards.count == 1)
+        #expect(repairedAwards[0].awardKey == "streak:coffee:3:2026-02-13")
+        #expect(repairedAwards[0].dateAwarded == olderAwardDate)
+
+        let repairedEvents = try modelContext.fetch(FetchDescriptor<SyncEventHistory>())
+        #expect(repairedEvents.count == 2)
+
+        guard let dedupedEvent = repairedEvents.first(where: { $0.eventIdentifier == "event-dup" }) else {
+            Issue.record("Expected deduplicated sync event to exist.")
+            return
+        }
+        #expect(dedupedEvent.kindRaw == "Export")
+        #expect(dedupedEvent.recordedAt == startedAt.addingTimeInterval(40))
+
+        guard let normalizedEvent = repairedEvents.first(where: { $0.eventIdentifier == "event-needs-normalization" }) else {
+            Issue.record("Expected normalized sync event to exist.")
+            return
+        }
+        #expect(normalizedEvent.kindRaw == "Sync")
+        #expect(normalizedEvent.outcomeRaw == "inProgress")
+        #expect(normalizedEvent.endedAt == normalizedEvent.startedAt)
+        #expect(normalizedEvent.recordedAt == normalizedEvent.startedAt)
+        #expect(normalizedEvent.detail == nil)
     }
 
     @Test

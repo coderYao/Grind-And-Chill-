@@ -63,7 +63,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        .onChange(of: usdPerHourRaw) { _, newValue in
+        .onChange(of: usdPerHourRaw, initial: false) { _, newValue in
             usdPerHourRaw = viewModel.normalizedUSDPerHour(newValue)
         }
     }

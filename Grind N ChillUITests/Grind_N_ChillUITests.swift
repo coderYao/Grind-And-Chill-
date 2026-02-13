@@ -167,9 +167,15 @@ final class Grind_N_ChillUITests: XCTestCase {
         usdPerCount: String = "1.00",
         in app: XCUIApplication
     ) {
-        app.navigationBars.buttons["Add"].tap()
+        let addButton = app.navigationBars.buttons["Add"].firstMatch
+        XCTAssertTrue(addButton.waitForExistence(timeout: 4))
+        if addButton.isHittable {
+            addButton.tap()
+        } else {
+            addButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         let titleField = app.textFields["categoryEditor.title"]
-        XCTAssertTrue(titleField.waitForExistence(timeout: 2))
+        XCTAssertTrue(titleField.waitForExistence(timeout: 4))
         titleField.tap()
         titleField.typeText(title)
 

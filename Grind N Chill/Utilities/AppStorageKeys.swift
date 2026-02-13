@@ -5,4 +5,5 @@ enum AppStorageKeys {
     static let hasCompletedOnboarding = "settings.hasCompletedOnboarding"
     static let activeCategoryID = "session.activeCategoryID"
     static let activeStartTime = "session.activeStartTime"
+    static let lastImportUndoPayload = "history.lastImportUndoPayload"
 }

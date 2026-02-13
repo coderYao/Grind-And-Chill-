@@ -185,46 +185,87 @@ enum GrindNChillMigrationPlan: SchemaMigrationPlan {
         ]
     }
 
+    private struct RepairSummary {
+        var categoriesRepaired = 0
+        var entriesRepaired = 0
+        var badgeAwardsRepaired = 0
+        var badgeAwardsDeduped = 0
+        var syncEventsRepaired = 0
+        var syncEventsDeduped = 0
+    }
+
+    static func repairStoreDataIfNeeded(in context: ModelContext) throws {
+        try applyPostMigrationDefaults(in: context)
+    }
+
+#if DEBUG
+    static func applyPostMigrationDefaultsForTesting(in context: ModelContext) throws {
+        try applyPostMigrationDefaults(in: context)
+    }
+#endif
+
     private static func applyPostMigrationDefaults(in context: ModelContext) throws {
+        var summary = RepairSummary()
+
         let categories = try context.fetch(FetchDescriptor<Category>())
         for category in categories {
             let trimmedTitle = category.title.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedTitle.isEmpty {
                 category.title = "Category"
+                summary.categoriesRepaired += 1
             } else if trimmedTitle != category.title {
                 category.title = trimmedTitle
+                summary.categoriesRepaired += 1
             }
 
             if category.multiplier <= 0 {
                 category.multiplier = 1.0
+                summary.categoriesRepaired += 1
             }
             if category.dailyGoalMinutes < 0 {
                 category.dailyGoalMinutes = 0
+                summary.categoriesRepaired += 1
             }
 
             if category.type == nil {
                 category.type = .goodHabit
+                summary.categoriesRepaired += 1
             }
             if category.unit == nil {
                 category.unit = .time
+                summary.categoriesRepaired += 1
             }
 
             let resolvedType = category.type ?? .goodHabit
-            if category.symbolName?.isEmpty != false {
-                category.symbolName = CategorySymbolCatalog.defaultSymbol(for: resolvedType)
+            let normalizedSymbol = CategorySymbolCatalog.normalizedSymbol(category.symbolName ?? "", for: resolvedType)
+            if category.symbolName != normalizedSymbol {
+                category.symbolName = normalizedSymbol
+                summary.categoriesRepaired += 1
             }
             if category.iconColor == nil {
                 category.iconColor = CategoryIconColor.defaultColor(for: resolvedType)
+                summary.categoriesRepaired += 1
             }
 
             if category.streakEnabled == nil {
                 category.streakEnabled = true
+                summary.categoriesRepaired += 1
             }
             if category.badgeEnabled == nil {
                 category.badgeEnabled = true
+                summary.categoriesRepaired += 1
             }
             if category.streakBonusEnabled == nil {
                 category.streakBonusEnabled = false
+                summary.categoriesRepaired += 1
+            }
+            if category.badgeMilestones?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                category.badgeMilestones = nil
+                summary.categoriesRepaired += 1
+            }
+            if category.streakBonusSchedule?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                category.streakBonusSchedule = nil
+                summary.categoriesRepaired += 1
             }
 
             let resolvedUnit = category.unit ?? .time
@@ -232,25 +273,51 @@ enum GrindNChillMigrationPlan: SchemaMigrationPlan {
             case .time:
                 if category.timeConversionMode == nil {
                     category.timeConversionMode = .multiplier
+                    summary.categoriesRepaired += 1
                 }
             case .money, .count:
-                category.timeConversionMode = nil
-                category.hourlyRateUSD = nil
+                if category.timeConversionMode != nil {
+                    category.timeConversionMode = nil
+                    summary.categoriesRepaired += 1
+                }
+                if category.hourlyRateUSD != nil {
+                    category.hourlyRateUSD = nil
+                    summary.categoriesRepaired += 1
+                }
             }
 
             if let usdPerCount = category.usdPerCount, usdPerCount <= 0 {
                 category.usdPerCount = nil
+                summary.categoriesRepaired += 1
             }
             if let hourlyRateUSD = category.hourlyRateUSD, hourlyRateUSD <= 0 {
                 category.hourlyRateUSD = nil
+                summary.categoriesRepaired += 1
             }
             if let streakBonusAmountUSD = category.streakBonusAmountUSD, streakBonusAmountUSD <= 0 {
                 category.streakBonusAmountUSD = nil
+                summary.categoriesRepaired += 1
             }
         }
 
         let entries = try context.fetch(FetchDescriptor<Entry>())
         for entry in entries {
+            if entry.durationMinutes < 0 {
+                entry.durationMinutes = 0
+                summary.entriesRepaired += 1
+            }
+
+            let normalizedNote = entry.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            if entry.note != normalizedNote {
+                entry.note = normalizedNote
+                summary.entriesRepaired += 1
+            }
+
+            if entry.bonusKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                entry.bonusKey = nil
+                summary.entriesRepaired += 1
+            }
+
             if entry.unit == nil {
                 if let category = entry.category {
                     entry.unit = category.resolvedUnit
@@ -259,42 +326,121 @@ enum GrindNChillMigrationPlan: SchemaMigrationPlan {
                 } else {
                     entry.unit = .money
                 }
+                summary.entriesRepaired += 1
             }
 
-            if entry.quantity == nil {
+            if let category = entry.category, category.resolvedType == .quitHabit, entry.amountUSD > .zeroValue {
+                entry.amountUSD = entry.amountUSD * Decimal(-1)
+                summary.entriesRepaired += 1
+            }
+
+            if entry.quantity == nil || (entry.quantity ?? .zeroValue) < .zeroValue {
                 switch entry.unit ?? .money {
                 case .time, .count:
                     entry.quantity = Decimal(max(0, entry.durationMinutes))
                 case .money:
                     entry.quantity = entry.amountUSD < .zeroValue ? (entry.amountUSD * Decimal(-1)) : entry.amountUSD
                 }
+                summary.entriesRepaired += 1
             }
         }
 
         let badgeAwards = try context.fetch(FetchDescriptor<BadgeAward>())
+        var badgeAwardsByKey: [String: BadgeAward] = [:]
+        var duplicateBadgeAwards: [BadgeAward] = []
         for award in badgeAwards {
             let trimmedAwardKey = award.awardKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            award.awardKey = trimmedAwardKey.isEmpty ? "badge:\(UUID().uuidString)" : trimmedAwardKey
+            let normalizedKey = trimmedAwardKey.isEmpty ? "badge:\(UUID().uuidString)" : trimmedAwardKey
+            if award.awardKey != normalizedKey {
+                award.awardKey = normalizedKey
+                summary.badgeAwardsRepaired += 1
+            }
+
+            if let existing = badgeAwardsByKey[normalizedKey] {
+                let shouldKeepCurrent = award.dateAwarded < existing.dateAwarded
+                if shouldKeepCurrent {
+                    duplicateBadgeAwards.append(existing)
+                    badgeAwardsByKey[normalizedKey] = award
+                } else {
+                    duplicateBadgeAwards.append(award)
+                }
+            } else {
+                badgeAwardsByKey[normalizedKey] = award
+            }
+        }
+        for duplicate in duplicateBadgeAwards {
+            context.delete(duplicate)
+            summary.badgeAwardsDeduped += 1
         }
 
         let syncEvents = try context.fetch(FetchDescriptor<SyncEventHistory>())
+        var syncEventsByIdentifier: [String: SyncEventHistory] = [:]
+        var duplicateSyncEvents: [SyncEventHistory] = []
         for event in syncEvents {
             let trimmedEventIdentifier = event.eventIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
-            event.eventIdentifier = trimmedEventIdentifier.isEmpty ? UUID().uuidString : trimmedEventIdentifier
+            let normalizedIdentifier = trimmedEventIdentifier.isEmpty ? UUID().uuidString : trimmedEventIdentifier
+            if event.eventIdentifier != normalizedIdentifier {
+                event.eventIdentifier = normalizedIdentifier
+                summary.syncEventsRepaired += 1
+            }
+
             if event.kindRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 event.kindRaw = "Sync"
+                summary.syncEventsRepaired += 1
             }
             if event.outcomeRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 event.outcomeRaw = "inProgress"
+                summary.syncEventsRepaired += 1
+            }
+            if let endedAt = event.endedAt, endedAt < event.startedAt {
+                event.endedAt = event.startedAt
+                summary.syncEventsRepaired += 1
             }
             if event.recordedAt < event.startedAt {
                 event.recordedAt = event.endedAt ?? event.startedAt
+                summary.syncEventsRepaired += 1
             }
+            if event.detail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                event.detail = nil
+                summary.syncEventsRepaired += 1
+            }
+
+            if let existing = syncEventsByIdentifier[normalizedIdentifier] {
+                let existingRank = (existing.recordedAt, existing.endedAt ?? existing.startedAt, existing.id.uuidString)
+                let currentRank = (event.recordedAt, event.endedAt ?? event.startedAt, event.id.uuidString)
+                if currentRank > existingRank {
+                    duplicateSyncEvents.append(existing)
+                    syncEventsByIdentifier[normalizedIdentifier] = event
+                } else {
+                    duplicateSyncEvents.append(event)
+                }
+            } else {
+                syncEventsByIdentifier[normalizedIdentifier] = event
+            }
+        }
+        for duplicate in duplicateSyncEvents {
+            context.delete(duplicate)
+            summary.syncEventsDeduped += 1
         }
 
         if context.hasChanges {
             try context.save()
         }
+
+#if DEBUG
+        if summary.categoriesRepaired > 0 ||
+            summary.entriesRepaired > 0 ||
+            summary.badgeAwardsRepaired > 0 ||
+            summary.badgeAwardsDeduped > 0 ||
+            summary.syncEventsRepaired > 0 ||
+            summary.syncEventsDeduped > 0 {
+            print(
+                """
+                Migration backfill repaired categories=\(summary.categoriesRepaired), entries=\(summary.entriesRepaired), badgeAwards=\(summary.badgeAwardsRepaired), badgeAwardsDeduped=\(summary.badgeAwardsDeduped), syncEvents=\(summary.syncEventsRepaired), syncEventsDeduped=\(summary.syncEventsDeduped)
+                """
+            )
+        }
+#endif
     }
 }
 

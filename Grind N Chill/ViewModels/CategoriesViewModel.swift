@@ -10,6 +10,44 @@ final class CategoriesViewModel {
         case edit
     }
 
+    struct DeletedEntrySnapshot: Equatable {
+        let id: UUID
+        let timestamp: Date
+        let durationMinutes: Int
+        let amountUSD: String
+        let quantity: String?
+        let unitRawValue: String?
+        let note: String
+        let bonusKey: String?
+        let isManual: Bool
+    }
+
+    struct DeletedCategorySnapshot: Equatable {
+        let id: UUID
+        let title: String
+        let multiplier: Double
+        let typeRawValue: String
+        let unitRawValue: String
+        let timeConversionModeRawValue: String
+        let hourlyRateUSD: Double?
+        let usdPerCount: Double?
+        let dailyGoalMinutes: Int
+        let streakEnabled: Bool
+        let badgeEnabled: Bool
+        let badgeMilestones: String?
+        let streakBonusEnabled: Bool
+        let streakBonusAmountUSD: Double?
+        let streakBonusSchedule: String?
+        let symbolName: String
+        let iconColorRawValue: String
+        let entries: [DeletedEntrySnapshot]
+    }
+
+    struct DeleteUndoPayload: Equatable {
+        let deletedAt: Date
+        let categories: [DeletedCategorySnapshot]
+    }
+
     var isPresentingEditorSheet = false
     var editorMode: EditorMode = .create
     private var editingCategoryID: UUID?
@@ -40,6 +78,11 @@ final class CategoriesViewModel {
     var latestError: String?
     var latestStatus: String?
     private let defaultStreakBonusAmountUSD = 5.0
+    private var lastDeletedPayload: DeleteUndoPayload?
+
+    var canUndoLastDeletion: Bool {
+        lastDeletedPayload != nil
+    }
 
     var editorSheetTitle: String {
         switch editorMode {
@@ -255,16 +298,150 @@ final class CategoriesViewModel {
             return
         }
 
-        for index in offsets {
-            modelContext.delete(categories[index])
-        }
-
         do {
+            var deletedSnapshots: [DeletedCategorySnapshot] = []
+            let categoriesToDelete = offsets.map { categories[$0] }
+
+            for category in categoriesToDelete {
+                let entrySnapshots = try deletedEntrySnapshots(
+                    forCategoryID: category.id,
+                    modelContext: modelContext
+                )
+                deletedSnapshots.append(
+                    DeletedCategorySnapshot(
+                        id: category.id,
+                        title: category.title,
+                        multiplier: category.multiplier,
+                        typeRawValue: category.resolvedType.rawValue,
+                        unitRawValue: category.resolvedUnit.rawValue,
+                        timeConversionModeRawValue: category.resolvedTimeConversionMode.rawValue,
+                        hourlyRateUSD: category.hourlyRateUSD,
+                        usdPerCount: category.usdPerCount,
+                        dailyGoalMinutes: category.dailyGoalMinutes,
+                        streakEnabled: category.resolvedStreakEnabled,
+                        badgeEnabled: category.resolvedBadgeEnabled,
+                        badgeMilestones: category.badgeMilestones,
+                        streakBonusEnabled: category.resolvedStreakBonusEnabled,
+                        streakBonusAmountUSD: category.streakBonusAmountUSD,
+                        streakBonusSchedule: category.streakBonusSchedule,
+                        symbolName: category.resolvedSymbolName,
+                        iconColorRawValue: category.resolvedIconColor.rawValue,
+                        entries: entrySnapshots
+                    )
+                )
+            }
+
+            for category in categoriesToDelete {
+                modelContext.delete(category)
+            }
+
             try modelContext.save()
+            lastDeletedPayload = DeleteUndoPayload(
+                deletedAt: .now,
+                categories: deletedSnapshots
+            )
             latestError = nil
             latestStatus = "Category deleted."
         } catch {
             latestError = "Could not delete category: \(error.localizedDescription)"
+            latestStatus = nil
+        }
+    }
+
+    func undoLastDeletedCategories(in modelContext: ModelContext) {
+        guard let payload = lastDeletedPayload else {
+            latestError = "No deleted category to undo."
+            latestStatus = nil
+            return
+        }
+
+        do {
+            let existingCategories = try modelContext.fetch(FetchDescriptor<Category>())
+            var existingCategoryIDs = Set(existingCategories.map(\.id))
+
+            let existingEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+            var existingEntryIDs = Set(existingEntries.map(\.id))
+
+            var restoredCategoryByID: [UUID: Category] = [:]
+            var restoredCategoryCount = 0
+            var restoredEntryCount = 0
+            var skippedCategoryCount = 0
+            var skippedEntryCount = 0
+
+            for snapshot in payload.categories {
+                if existingCategoryIDs.contains(snapshot.id) {
+                    skippedCategoryCount += 1
+                    continue
+                }
+
+                let restoredCategory = Category(
+                    id: snapshot.id,
+                    title: snapshot.title,
+                    multiplier: max(1, snapshot.multiplier),
+                    type: CategoryType(rawValue: snapshot.typeRawValue) ?? .goodHabit,
+                    dailyGoalMinutes: max(0, snapshot.dailyGoalMinutes),
+                    symbolName: CategorySymbolCatalog.normalizedSymbol(
+                        snapshot.symbolName,
+                        for: CategoryType(rawValue: snapshot.typeRawValue) ?? .goodHabit
+                    ),
+                    iconColor: CategoryIconColor(rawValue: snapshot.iconColorRawValue)
+                        ?? CategoryIconColor.defaultColor(
+                            for: CategoryType(rawValue: snapshot.typeRawValue) ?? .goodHabit
+                        ),
+                    unit: CategoryUnit(rawValue: snapshot.unitRawValue) ?? .time,
+                    timeConversionMode: TimeConversionMode(rawValue: snapshot.timeConversionModeRawValue)
+                        ?? .multiplier,
+                    hourlyRateUSD: snapshot.hourlyRateUSD,
+                    usdPerCount: snapshot.usdPerCount,
+                    streakEnabled: snapshot.streakEnabled,
+                    badgeEnabled: snapshot.badgeEnabled,
+                    badgeMilestones: snapshot.badgeMilestones,
+                    streakBonusEnabled: snapshot.streakBonusEnabled,
+                    streakBonusAmountUSD: snapshot.streakBonusAmountUSD,
+                    streakBonusSchedule: snapshot.streakBonusSchedule
+                )
+                modelContext.insert(restoredCategory)
+                restoredCategoryByID[snapshot.id] = restoredCategory
+                existingCategoryIDs.insert(snapshot.id)
+                restoredCategoryCount += 1
+            }
+
+            for categorySnapshot in payload.categories {
+                guard let restoredCategory = restoredCategoryByID[categorySnapshot.id] else { continue }
+
+                for entrySnapshot in categorySnapshot.entries {
+                    if existingEntryIDs.contains(entrySnapshot.id) {
+                        skippedEntryCount += 1
+                        continue
+                    }
+
+                    let restoredEntry = Entry(
+                        id: entrySnapshot.id,
+                        timestamp: entrySnapshot.timestamp,
+                        durationMinutes: entrySnapshot.durationMinutes,
+                        amountUSD: decimal(from: entrySnapshot.amountUSD) ?? .zeroValue,
+                        category: restoredCategory,
+                        note: entrySnapshot.note,
+                        bonusKey: entrySnapshot.bonusKey,
+                        isManual: entrySnapshot.isManual,
+                        quantity: entrySnapshot.quantity.flatMap(decimal(from:)),
+                        unit: entrySnapshot.unitRawValue.flatMap(CategoryUnit.init(rawValue:))
+                    )
+                    modelContext.insert(restoredEntry)
+                    existingEntryIDs.insert(entrySnapshot.id)
+                    restoredEntryCount += 1
+                }
+            }
+
+            try modelContext.save()
+            lastDeletedPayload = nil
+            latestError = nil
+            latestStatus = """
+            Restored \(restoredCategoryCount) categories and \(restoredEntryCount) entries.
+            Skipped \(skippedCategoryCount) categories and \(skippedEntryCount) entries.
+            """
+        } catch {
+            latestError = "Could not undo category deletion: \(error.localizedDescription)"
             latestStatus = nil
         }
     }
@@ -393,6 +570,37 @@ final class CategoriesViewModel {
 
     func setStreakBonusAmount(_ amount: Double, for milestone: Int) {
         streakBonusAmountsUSD[milestone] = amount
+    }
+
+    private func deletedEntrySnapshots(
+        forCategoryID categoryID: UUID,
+        modelContext: ModelContext
+    ) throws -> [DeletedEntrySnapshot] {
+        let descriptor = FetchDescriptor<Entry>(
+            predicate: #Predicate<Entry> { entry in
+                entry.category?.id == categoryID
+            },
+            sortBy: [SortDescriptor(\.timestamp, order: .forward)]
+        )
+        let entries = try modelContext.fetch(descriptor)
+
+        return entries.map { entry in
+            DeletedEntrySnapshot(
+                id: entry.id,
+                timestamp: entry.timestamp,
+                durationMinutes: entry.durationMinutes,
+                amountUSD: NSDecimalNumber(decimal: entry.amountUSD).stringValue,
+                quantity: entry.quantity.map { NSDecimalNumber(decimal: $0).stringValue },
+                unitRawValue: entry.unit?.rawValue,
+                note: entry.note,
+                bonusKey: entry.bonusKey,
+                isManual: entry.isManual
+            )
+        }
+    }
+
+    private func decimal(from text: String) -> Decimal? {
+        Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")) ?? Decimal(string: text)
     }
 
     private func parsedBadgeMilestones(from raw: String) -> [Int]? {

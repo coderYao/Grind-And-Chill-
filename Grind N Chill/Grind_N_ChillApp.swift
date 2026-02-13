@@ -28,6 +28,7 @@ struct Grind_N_ChillApp: App {
 
         do {
             _ = try LegacyDataRepairService.repairCategoriesIfNeeded(in: sharedContainer.mainContext)
+            try GrindNChillMigrationPlan.repairStoreDataIfNeeded(in: sharedContainer.mainContext)
         } catch {
             print("Failed to run legacy data repair: \(error)")
         }

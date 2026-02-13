@@ -37,7 +37,7 @@ struct ContentView: View {
                 }
                 runSyncMaintenance(force: false)
             }
-            .onChange(of: scenePhase) { _, newPhase in
+            .onChange(of: scenePhase, initial: false) { _, newPhase in
                 guard newPhase == .active else { return }
                 syncMonitor.markRefreshRequested()
                 runSyncMaintenance(force: true)

@@ -31,13 +31,13 @@ struct SessionView: View {
                 runningCategoryID: timerManager.activeCategoryID
             )
         }
-        .onChange(of: categories.map(\.id)) { _, _ in
+        .onChange(of: categories.map(\.id), initial: false) { _, _ in
             viewModel.ensureCategorySelection(
                 from: categories,
                 runningCategoryID: timerManager.activeCategoryID
             )
         }
-        .onChange(of: timerManager.activeCategoryID) { _, _ in
+        .onChange(of: timerManager.activeCategoryID, initial: false) { _, _ in
             viewModel.ensureCategorySelection(
                 from: categories,
                 runningCategoryID: timerManager.activeCategoryID
