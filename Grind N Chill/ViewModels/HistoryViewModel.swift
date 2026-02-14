@@ -77,18 +77,55 @@ final class HistoryViewModel {
         }
     }
 
+    struct ManualEntryDraft: Identifiable, Equatable {
+        let id: UUID
+        let categoryTitle: String
+        let unit: CategoryUnit
+        let categoryType: CategoryType
+        var amountInput: Double
+        var countInput: Double
+        var durationMinutes: Int
+        var note: String
+    }
+
+    struct DeletedEntrySnapshot: Codable, Equatable {
+        let id: UUID
+        let timestamp: Date
+        let durationMinutes: Int
+        let amountUSD: String
+        let quantity: String?
+        let unitRawValue: String?
+        let note: String
+        let bonusKey: String?
+        let isManual: Bool
+        let categoryID: UUID?
+    }
+
+    struct DeleteUndoPayload: Codable, Equatable {
+        let deletedAt: Date
+        let entries: [DeletedEntrySnapshot]
+    }
+
     var showManualOnly = false
     var dateRangeFilter: DateRangeFilter = .all
     var customStartDate = Date.now
     var customEndDate = Date.now
     var canUndoLastImport = false
+    var canUndoLastDelete = false
     var latestStatus: String?
     var latestError: String?
-    private let undoStore: HistoryImportUndoStore
+    private let importUndoStore: HistoryImportUndoStore
+    private let deleteUndoStore: HistoryDeleteUndoStore
+    private let ledgerService = LedgerService()
 
-    init(undoStore: HistoryImportUndoStore = HistoryImportUndoStore()) {
-        self.undoStore = undoStore
-        canUndoLastImport = undoStore.load() != nil
+    init(
+        importUndoStore: HistoryImportUndoStore = HistoryImportUndoStore(),
+        deleteUndoStore: HistoryDeleteUndoStore = HistoryDeleteUndoStore()
+    ) {
+        self.importUndoStore = importUndoStore
+        self.deleteUndoStore = deleteUndoStore
+        canUndoLastImport = importUndoStore.load() != nil
+        canUndoLastDelete = deleteUndoStore.load() != nil
     }
 
     var showsCustomDateRange: Bool {
@@ -215,17 +252,201 @@ final class HistoryViewModel {
     }
 
     func deleteEntries(at offsets: IndexSet, from entries: [Entry], modelContext: ModelContext) {
-        for index in offsets {
-            modelContext.delete(entries[index])
-        }
-
         do {
+            let entriesToDelete = offsets.map { entries[$0] }
+            let payload = DeleteUndoPayload(
+                deletedAt: .now,
+                entries: entriesToDelete.map(snapshot(from:))
+            )
+
+            for entry in entriesToDelete {
+                modelContext.delete(entry)
+            }
+
             try modelContext.save()
+            deleteUndoStore.save(payload)
+            canUndoLastDelete = true
             latestStatus = "Deleted \(offsets.count) entr\(offsets.count == 1 ? "y" : "ies")."
             latestError = nil
         } catch {
             latestStatus = nil
             latestError = "Could not delete entry: \(error.localizedDescription)"
+        }
+    }
+
+    func undoLastDelete(modelContext: ModelContext) {
+        guard let payload = deleteUndoStore.load() else {
+            canUndoLastDelete = false
+            latestStatus = nil
+            latestError = "No deleted entry is available to undo."
+            return
+        }
+
+        do {
+            let existingEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+            var existingIDs = Set(existingEntries.map(\.id))
+            let categories = try modelContext.fetch(FetchDescriptor<Category>())
+            let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+
+            var restored = 0
+            var skipped = 0
+
+            for snapshot in payload.entries {
+                if existingIDs.contains(snapshot.id) {
+                    skipped += 1
+                    continue
+                }
+
+                let restoredEntry = Entry(
+                    id: snapshot.id,
+                    timestamp: snapshot.timestamp,
+                    durationMinutes: snapshot.durationMinutes,
+                    amountUSD: decimal(from: snapshot.amountUSD) ?? .zeroValue,
+                    category: snapshot.categoryID.flatMap { categoriesByID[$0] },
+                    note: snapshot.note,
+                    bonusKey: snapshot.bonusKey,
+                    isManual: snapshot.isManual,
+                    quantity: snapshot.quantity.flatMap(decimal(from:)),
+                    unit: snapshot.unitRawValue.flatMap(CategoryUnit.init(rawValue:))
+                )
+                modelContext.insert(restoredEntry)
+                existingIDs.insert(snapshot.id)
+                restored += 1
+            }
+
+            try modelContext.save()
+            deleteUndoStore.clear()
+            canUndoLastDelete = false
+            latestStatus = "Undo complete: restored \(restored), skipped \(skipped)."
+            latestError = nil
+        } catch {
+            latestStatus = nil
+            latestError = "Could not undo delete: \(error.localizedDescription)"
+        }
+    }
+
+    func manualDraft(for entry: Entry) -> ManualEntryDraft? {
+        guard entry.isManual else { return nil }
+
+        let categoryType = entry.category?.resolvedType ?? .goodHabit
+        let unit = entry.resolvedUnit
+        let categoryTitle = entry.category?.title ?? "Unknown Category"
+        let absAmount = absolute(entry.amountUSD)
+        let quantity = entry.resolvedQuantity
+
+        switch unit {
+        case .time:
+            return ManualEntryDraft(
+                id: entry.id,
+                categoryTitle: categoryTitle,
+                unit: .time,
+                categoryType: categoryType,
+                amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
+                countInput: NSDecimalNumber(decimal: quantity).doubleValue,
+                durationMinutes: max(1, entry.durationMinutes),
+                note: entry.note
+            )
+        case .count:
+            return ManualEntryDraft(
+                id: entry.id,
+                categoryTitle: categoryTitle,
+                unit: .count,
+                categoryType: categoryType,
+                amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
+                countInput: NSDecimalNumber(decimal: quantity).doubleValue,
+                durationMinutes: entry.durationMinutes,
+                note: entry.note
+            )
+        case .money:
+            return ManualEntryDraft(
+                id: entry.id,
+                categoryTitle: categoryTitle,
+                unit: .money,
+                categoryType: categoryType,
+                amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
+                countInput: NSDecimalNumber(decimal: quantity).doubleValue,
+                durationMinutes: entry.durationMinutes,
+                note: entry.note
+            )
+        }
+    }
+
+    @discardableResult
+    func saveManualEdit(
+        _ draft: ManualEntryDraft,
+        entries: [Entry],
+        modelContext: ModelContext,
+        usdPerHour: Decimal
+    ) -> Bool {
+        guard let entry = entries.first(where: { $0.id == draft.id }) else {
+            latestStatus = nil
+            latestError = "Could not find entry to edit."
+            return false
+        }
+
+        guard entry.isManual else {
+            latestStatus = nil
+            latestError = "Only manual entries can be edited."
+            return false
+        }
+
+        guard let category = entry.category else {
+            latestStatus = nil
+            latestError = "Entry is missing its category."
+            return false
+        }
+
+        let quantity: Decimal
+        let durationMinutes: Int
+
+        switch draft.unit {
+        case .time:
+            guard draft.durationMinutes > 0 else {
+                latestStatus = nil
+                latestError = "Duration must be greater than zero."
+                return false
+            }
+            durationMinutes = draft.durationMinutes
+            quantity = Decimal(durationMinutes)
+        case .count:
+            guard draft.countInput > 0 else {
+                latestStatus = nil
+                latestError = "Count must be greater than zero."
+                return false
+            }
+            durationMinutes = 0
+            quantity = decimal(from: draft.countInput) ?? .zeroValue
+        case .money:
+            guard draft.amountInput > 0 else {
+                latestStatus = nil
+                latestError = "Amount must be greater than zero."
+                return false
+            }
+            durationMinutes = 0
+            quantity = decimal(from: draft.amountInput) ?? .zeroValue
+        }
+
+        let amount = ledgerService.amountUSD(
+            for: category,
+            quantity: quantity,
+            usdPerHour: usdPerHour
+        )
+
+        entry.durationMinutes = durationMinutes
+        entry.quantity = quantity
+        entry.unit = draft.unit
+        entry.amountUSD = amount
+        entry.note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            try modelContext.save()
+            latestStatus = "Manual entry updated."
+            latestError = nil
+            return true
+        } catch {
+            latestStatus = nil
+            latestError = "Could not save edited entry: \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -241,10 +462,10 @@ final class HistoryViewModel {
                 conflictPolicy: conflictPolicy
             )
             if let payload = report.undoPayload {
-                undoStore.save(payload)
+                importUndoStore.save(payload)
                 canUndoLastImport = true
             } else {
-                undoStore.clear()
+                importUndoStore.clear()
                 canUndoLastImport = false
             }
             latestStatus = importSummaryText(report)
@@ -282,7 +503,7 @@ final class HistoryViewModel {
     }
 
     func undoLastImport(modelContext: ModelContext) {
-        guard let payload = undoStore.load() else {
+        guard let payload = importUndoStore.load() else {
             latestStatus = nil
             latestError = "No import transaction is available to undo."
             canUndoLastImport = false
@@ -291,7 +512,7 @@ final class HistoryViewModel {
 
         do {
             let report = try HistoryImportService.undoImport(payload, modelContext: modelContext)
-            undoStore.clear()
+            importUndoStore.clear()
             canUndoLastImport = false
             latestStatus = undoSummaryText(report)
             latestError = nil
@@ -311,6 +532,33 @@ final class HistoryViewModel {
         case .money:
             return entry.resolvedQuantity.formatted(.currency(code: "USD"))
         }
+    }
+
+    private func snapshot(from entry: Entry) -> DeletedEntrySnapshot {
+        DeletedEntrySnapshot(
+            id: entry.id,
+            timestamp: entry.timestamp,
+            durationMinutes: entry.durationMinutes,
+            amountUSD: Self.decimalString(entry.amountUSD),
+            quantity: entry.quantity.map(Self.decimalString),
+            unitRawValue: entry.unit?.rawValue,
+            note: entry.note,
+            bonusKey: entry.bonusKey,
+            isManual: entry.isManual,
+            categoryID: entry.category?.id
+        )
+    }
+
+    private func decimal(from value: Double) -> Decimal? {
+        Decimal(string: String(value)) ?? Decimal(value)
+    }
+
+    private func decimal(from text: String) -> Decimal? {
+        Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")) ?? Decimal(string: text)
+    }
+
+    private func absolute(_ value: Decimal) -> Decimal {
+        value < .zeroValue ? (value * Decimal(-1)) : value
     }
 
     private func importSummaryText(_ report: HistoryImportService.Report) -> String {

@@ -6,4 +6,6 @@ enum AppStorageKeys {
     static let activeCategoryID = "session.activeCategoryID"
     static let activeStartTime = "session.activeStartTime"
     static let lastImportUndoPayload = "history.lastImportUndoPayload"
+    static let lastCategoryDeleteUndoPayload = "categories.lastDeleteUndoPayload"
+    static let lastHistoryDeleteUndoPayload = "history.lastDeleteUndoPayload"
 }

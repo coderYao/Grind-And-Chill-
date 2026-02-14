@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Entry.timestamp, order: .reverse) private var entries: [Entry]
+    @AppStorage(AppStorageKeys.usdPerHour) private var usdPerHourRaw: Double = 18
 
     @State private var viewModel = HistoryViewModel()
     @State private var exportDocument: HistoryExportDocument?
@@ -17,6 +18,7 @@ struct HistoryView: View {
     @State private var isShowingUndoConfirmation = false
     @State private var pendingImportData: Data?
     @State private var pendingImportPreview: HistoryImportService.PreviewReport?
+    @State private var editingDraft: HistoryViewModel.ManualEntryDraft?
 
     var body: some View {
         let filtered = viewModel.filteredEntries(from: entries)
@@ -112,6 +114,12 @@ struct HistoryView: View {
                             isShowingUndoConfirmation = true
                         }
                     }
+
+                    if viewModel.canUndoLastDelete {
+                        Button("Undo Last Delete") {
+                            viewModel.undoLastDelete(modelContext: modelContext)
+                        }
+                    }
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
@@ -179,6 +187,26 @@ struct HistoryView: View {
             }
         } message: {
             Text("This will revert the most recent imported changes.")
+        }
+        .sheet(item: $editingDraft) { draft in
+            HistoryManualEntryEditorSheet(
+                draft: draft,
+                onCancel: {
+                    editingDraft = nil
+                },
+                onSave: { updatedDraft in
+                    let rate = Decimal(string: String(usdPerHourRaw)) ?? Decimal(usdPerHourRaw)
+                    let saved = viewModel.saveManualEdit(
+                        updatedDraft,
+                        entries: entries,
+                        modelContext: modelContext,
+                        usdPerHour: rate
+                    )
+                    if saved {
+                        editingDraft = nil
+                    }
+                }
+            )
         }
     }
 
@@ -288,6 +316,18 @@ struct HistoryView: View {
                     .foregroundStyle(entry.amountUSD < .zeroValue ? .red : .green)
             }
 
+            if entry.isManual, let draft = viewModel.manualDraft(for: entry) {
+                HStack {
+                    Spacer()
+                    Button("Edit Manual Entry") {
+                        editingDraft = draft
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("history.editManual")
+                }
+            }
+
             Text(viewModel.subtitle(for: entry))
                 .font(.subheadline)
 
@@ -388,6 +428,93 @@ struct HistoryView: View {
         }
 
         return "\(summary)\nContinue with import?"
+    }
+}
+
+private struct HistoryManualEntryEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: HistoryViewModel.ManualEntryDraft
+    let onCancel: () -> Void
+    let onSave: (HistoryViewModel.ManualEntryDraft) -> Void
+
+    init(
+        draft: HistoryViewModel.ManualEntryDraft,
+        onCancel: @escaping () -> Void,
+        onSave: @escaping (HistoryViewModel.ManualEntryDraft) -> Void
+    ) {
+        _draft = State(initialValue: draft)
+        self.onCancel = onCancel
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Category") {
+                    Text(draft.categoryTitle)
+                    Text(draft.categoryType.displayTitle)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Amount") {
+                    switch draft.unit {
+                    case .time:
+                        Stepper(value: $draft.durationMinutes, in: 1 ... 1_440) {
+                            Text("Duration: \(draft.durationMinutes) minutes")
+                        }
+                        .accessibilityIdentifier("history.edit.duration")
+                    case .count:
+                        HStack {
+                            Text("Count")
+                            Spacer()
+                            TextField(
+                                "Count",
+                                value: $draft.countInput,
+                                format: .number.precision(.fractionLength(0 ... 2))
+                            )
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 120)
+                            .accessibilityIdentifier("history.edit.count")
+                        }
+                    case .money:
+                        HStack {
+                            Text("Amount (USD)")
+                            Spacer()
+                            TextField(
+                                "Amount",
+                                value: $draft.amountInput,
+                                format: .number.precision(.fractionLength(0 ... 2))
+                            )
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 120)
+                            .accessibilityIdentifier("history.edit.amount")
+                        }
+                    }
+                }
+
+                Section("Note") {
+                    TextField("Note", text: $draft.note, axis: .vertical)
+                        .accessibilityIdentifier("history.edit.note")
+                }
+            }
+            .navigationTitle("Edit Manual Entry")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        onCancel()
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        onSave(draft)
+                    }
+                }
+            }
+        }
     }
 }
 

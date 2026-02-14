@@ -10,7 +10,7 @@ final class CategoriesViewModel {
         case edit
     }
 
-    struct DeletedEntrySnapshot: Equatable {
+    struct DeletedEntrySnapshot: Codable, Equatable {
         let id: UUID
         let timestamp: Date
         let durationMinutes: Int
@@ -22,7 +22,7 @@ final class CategoriesViewModel {
         let isManual: Bool
     }
 
-    struct DeletedCategorySnapshot: Equatable {
+    struct DeletedCategorySnapshot: Codable, Equatable {
         let id: UUID
         let title: String
         let multiplier: Double
@@ -43,7 +43,7 @@ final class CategoriesViewModel {
         let entries: [DeletedEntrySnapshot]
     }
 
-    struct DeleteUndoPayload: Equatable {
+    struct DeleteUndoPayload: Codable, Equatable {
         let deletedAt: Date
         let categories: [DeletedCategorySnapshot]
     }
@@ -78,10 +78,16 @@ final class CategoriesViewModel {
     var latestError: String?
     var latestStatus: String?
     private let defaultStreakBonusAmountUSD = 5.0
+    private let deleteUndoStore: CategoryDeleteUndoStore
     private var lastDeletedPayload: DeleteUndoPayload?
 
     var canUndoLastDeletion: Bool {
         lastDeletedPayload != nil
+    }
+
+    init(deleteUndoStore: CategoryDeleteUndoStore = CategoryDeleteUndoStore()) {
+        self.deleteUndoStore = deleteUndoStore
+        self.lastDeletedPayload = deleteUndoStore.load()
     }
 
     var editorSheetTitle: String {
@@ -340,6 +346,9 @@ final class CategoriesViewModel {
                 deletedAt: .now,
                 categories: deletedSnapshots
             )
+            if let lastDeletedPayload {
+                deleteUndoStore.save(lastDeletedPayload)
+            }
             latestError = nil
             latestStatus = "Category deleted."
         } catch {
@@ -350,6 +359,7 @@ final class CategoriesViewModel {
 
     func undoLastDeletedCategories(in modelContext: ModelContext) {
         guard let payload = lastDeletedPayload else {
+            deleteUndoStore.clear()
             latestError = "No deleted category to undo."
             latestStatus = nil
             return
@@ -435,6 +445,7 @@ final class CategoriesViewModel {
 
             try modelContext.save()
             lastDeletedPayload = nil
+            deleteUndoStore.clear()
             latestError = nil
             latestStatus = """
             Restored \(restoredCategoryCount) categories and \(restoredEntryCount) entries.

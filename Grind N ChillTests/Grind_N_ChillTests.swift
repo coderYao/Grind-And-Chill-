@@ -222,6 +222,43 @@ struct Grind_N_ChillTests {
     }
 
     @Test
+    @MainActor
+    func liveTimerAmountUsesElapsedSecondsAndCategorySign() {
+        let viewModel = SessionViewModel()
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        let chillCategory = Category(
+            title: "Gaming",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 30,
+            unit: .time
+        )
+
+        let usdPerHour = Decimal(60) // $1 per minute
+
+        let grindAmount = viewModel.liveAmountUSD(
+            for: grindCategory,
+            elapsedSeconds: 90,
+            usdPerHour: usdPerHour
+        )
+        let chillAmount = viewModel.liveAmountUSD(
+            for: chillCategory,
+            elapsedSeconds: 90,
+            usdPerHour: usdPerHour
+        )
+
+        #expect(grindAmount == (Decimal(string: "1.50") ?? .zeroValue))
+        #expect(chillAmount == (Decimal(string: "-1.50") ?? .zeroValue))
+    }
+
+    @Test
     func goodHabitStreakSkipsIncompleteTodayAndCountsPreviousDays() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -811,6 +848,149 @@ struct Grind_N_ChillTests {
         #expect(payload.entries[0].categoryTitle == "Snacks")
         #expect(payload.entries[0].unit == CategoryUnit.money.rawValue)
         #expect(payload.entries[0].isManual == true)
+    }
+
+    @Test
+    @MainActor
+    func historyManualEditRecalculatesAmountAndSavesNote() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Coffee",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+        modelContext.insert(category)
+
+        let entry = Entry(
+            timestamp: Date(timeIntervalSinceReferenceDate: 100_000),
+            durationMinutes: 0,
+            amountUSD: Decimal(string: "-4.50") ?? .zeroValue,
+            category: category,
+            note: "old note",
+            isManual: true,
+            quantity: Decimal(string: "4.50"),
+            unit: .money
+        )
+        modelContext.insert(entry)
+        try modelContext.save()
+
+        let suiteName = "GrindNChill.HistoryEdit.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults suite.")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let viewModel = HistoryViewModel(
+            importUndoStore: HistoryImportUndoStore(userDefaults: defaults),
+            deleteUndoStore: HistoryDeleteUndoStore(userDefaults: defaults)
+        )
+        guard var draft = viewModel.manualDraft(for: entry) else {
+            Issue.record("Expected manual draft.")
+            return
+        }
+        draft.amountInput = 6.75
+        draft.note = "updated note"
+
+        let saved = viewModel.saveManualEdit(
+            draft,
+            entries: [entry],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+        #expect(saved == true)
+
+        let persistedEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(persistedEntries.count == 1)
+        #expect(persistedEntries[0].amountUSD == (Decimal(string: "-6.75") ?? .zeroValue))
+        #expect(persistedEntries[0].quantity == (Decimal(string: "6.75") ?? .zeroValue))
+        #expect(persistedEntries[0].note == "updated note")
+        #expect(viewModel.latestStatus == "Manual entry updated.")
+    }
+
+    @Test
+    @MainActor
+    func historyDeleteUndoRestoresDeletedEntry() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(category)
+
+        let deletedID = UUID()
+        let keptID = UUID()
+        let deletedEntry = Entry(
+            id: deletedID,
+            timestamp: Date(timeIntervalSinceReferenceDate: 101_000),
+            durationMinutes: 45,
+            amountUSD: Decimal(string: "13.50") ?? .zeroValue,
+            category: category,
+            note: "delete me",
+            isManual: true,
+            quantity: Decimal(45),
+            unit: .time
+        )
+        let keptEntry = Entry(
+            id: keptID,
+            timestamp: Date(timeIntervalSinceReferenceDate: 101_100),
+            durationMinutes: 30,
+            amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+            category: category,
+            isManual: false
+        )
+        modelContext.insert(deletedEntry)
+        modelContext.insert(keptEntry)
+        try modelContext.save()
+
+        let suiteName = "GrindNChill.HistoryDeleteUndo.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults suite.")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let viewModel = HistoryViewModel(
+            importUndoStore: HistoryImportUndoStore(userDefaults: defaults),
+            deleteUndoStore: HistoryDeleteUndoStore(userDefaults: defaults)
+        )
+
+        viewModel.deleteEntries(
+            at: IndexSet(integer: 0),
+            from: [deletedEntry, keptEntry],
+            modelContext: modelContext
+        )
+        #expect(viewModel.canUndoLastDelete == true)
+
+        let entriesAfterDelete = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entriesAfterDelete.count == 1)
+        #expect(entriesAfterDelete[0].id == keptID)
+
+        viewModel.undoLastDelete(modelContext: modelContext)
+        #expect(viewModel.canUndoLastDelete == false)
+
+        let entriesAfterUndo = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(entriesAfterUndo.count == 2)
+        #expect(entriesAfterUndo.contains(where: { $0.id == deletedID }))
+
+        guard let restored = entriesAfterUndo.first(where: { $0.id == deletedID }) else {
+            Issue.record("Expected restored entry.")
+            return
+        }
+        #expect(restored.note == "delete me")
+        #expect(restored.amountUSD == (Decimal(string: "13.5") ?? .zeroValue))
+        #expect(restored.quantity == Decimal(45))
     }
 
     @Test
@@ -1584,6 +1764,75 @@ struct Grind_N_ChillTests {
         #expect(restoredEntry.bonusKey == "bonus:1")
         #expect(restoredEntry.durationMinutes == 40)
         #expect(restoredEntry.amountUSD == (Decimal(string: "12.0") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func categoryDeleteUndoPersistsAcrossViewModelRecreation() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let suiteName = "GrindNChill.CategoryDeleteUndo.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults suite.")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let undoStore = CategoryDeleteUndoStore(userDefaults: defaults)
+
+        let deletedCategory = Category(
+            title: "Writing",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30,
+            unit: .time
+        )
+        let keptCategory = Category(
+            title: "Reading",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 20,
+            unit: .time
+        )
+        modelContext.insert(deletedCategory)
+        modelContext.insert(keptCategory)
+
+        let deletedEntryID = UUID()
+        modelContext.insert(
+            Entry(
+                id: deletedEntryID,
+                timestamp: Date(timeIntervalSinceReferenceDate: 91_000),
+                durationMinutes: 25,
+                amountUSD: Decimal(string: "7.50") ?? .zeroValue,
+                category: deletedCategory,
+                note: "persist me",
+                isManual: true
+            )
+        )
+        try modelContext.save()
+
+        let firstViewModel = CategoriesViewModel(deleteUndoStore: undoStore)
+        firstViewModel.deleteCategories(
+            at: IndexSet(integer: 0),
+            from: [deletedCategory, keptCategory],
+            modelContext: modelContext,
+            activeCategoryID: nil
+        )
+        #expect(firstViewModel.canUndoLastDeletion == true)
+
+        let secondViewModel = CategoriesViewModel(deleteUndoStore: undoStore)
+        #expect(secondViewModel.canUndoLastDeletion == true)
+        secondViewModel.undoLastDeletedCategories(in: modelContext)
+
+        let categoriesAfterUndo = try modelContext.fetch(FetchDescriptor<Grind_N_Chill.Category>())
+        let entriesAfterUndo = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(categoriesAfterUndo.count == 2)
+        #expect(entriesAfterUndo.contains(where: { $0.id == deletedEntryID }))
+
+        let thirdViewModel = CategoriesViewModel(deleteUndoStore: undoStore)
+        #expect(thirdViewModel.canUndoLastDeletion == false)
     }
 
     @Test

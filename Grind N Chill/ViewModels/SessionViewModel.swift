@@ -196,6 +196,21 @@ final class SessionViewModel {
         return category.title
     }
 
+    func liveAmountUSD(
+        for category: Category?,
+        elapsedSeconds: Int,
+        usdPerHour: Decimal
+    ) -> Decimal? {
+        guard let category, category.resolvedUnit == .time else { return nil }
+        let clampedSeconds = max(0, elapsedSeconds)
+        let minutes = Decimal(clampedSeconds) / Decimal(60)
+        return ledgerService.amountUSD(
+            for: category,
+            quantity: minutes,
+            usdPerHour: usdPerHour
+        )
+    }
+
     private func decimal(from value: Double) -> Decimal {
         Decimal(string: String(value)) ?? Decimal(value)
     }

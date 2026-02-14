@@ -75,9 +75,23 @@ struct SessionView: View {
                     .font(.headline)
 
                 TimelineView(.periodic(from: .now, by: 1.0)) { context in
-                    Text(formattedDuration(timerManager.elapsedSeconds(at: context.date)))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .monospacedDigit()
+                    let elapsedSeconds = timerManager.elapsedSeconds(at: context.date)
+                    let liveAmount = viewModel.liveAmountUSD(
+                        for: selectedCategory,
+                        elapsedSeconds: elapsedSeconds,
+                        usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
+                    ) ?? .zeroValue
+
+                    VStack(spacing: 6) {
+                        Text(formattedDuration(elapsedSeconds))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+
+                        Text(liveAmount, format: .currency(code: "USD"))
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(liveAmount < .zeroValue ? .red : .green)
+                            .accessibilityIdentifier("session.liveAmount")
+                    }
                 }
 
                 @Bindable var bindableViewModel = viewModel
