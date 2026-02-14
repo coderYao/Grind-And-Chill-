@@ -33,12 +33,13 @@ struct BadgeService {
 
         guard streak > 0 else { return [] }
 
-        let dayKey = now.isoDayString(calendar: calendar)
+        let cadence = category.resolvedStreakCadence
+        let periodKey = cadencePeriodKey(cadence: cadence, now: now, calendar: calendar)
         let badgeID = "streak:\(category.id.uuidString)"
         var awards: [BadgeAward] = []
 
         for milestone in resolvedMilestones where streak >= milestone {
-            let key = "\(badgeID):\(milestone):\(dayKey)"
+            let key = "\(badgeID):\(milestone):\(periodKey)"
             let shouldSkip: Bool
 
             if badgeEnabled {
@@ -72,7 +73,7 @@ struct BadgeService {
                     durationMinutes: 0,
                     amountUSD: roundedBonusAmount,
                     category: category,
-                    note: "Streak bonus (\(milestone)d)",
+                    note: "Streak bonus (\(milestone)\(cadence.shortSuffix))",
                     bonusKey: key,
                     isManual: true,
                     quantity: roundedBonusAmount,
@@ -83,5 +84,16 @@ struct BadgeService {
         }
 
         return awards
+    }
+
+    private func cadencePeriodKey(cadence: StreakCadence, now: Date, calendar: Calendar) -> String {
+        switch cadence {
+        case .daily:
+            return now.isoDayString(calendar: calendar)
+        case .weekly:
+            return "w\(now.isoWeekString(calendar: calendar))"
+        case .monthly:
+            return "m\(now.isoMonthString(calendar: calendar))"
+        }
     }
 }

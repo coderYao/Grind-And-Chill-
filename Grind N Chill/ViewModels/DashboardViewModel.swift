@@ -29,7 +29,33 @@ final class DashboardViewModel {
         let iconColor: CategoryIconColor
         let type: CategoryType
         let streakDays: Int
+        let cadence: StreakCadence
         let progressText: String
+    }
+
+    struct WeeklyTrend {
+        let currentNet: Decimal
+        let previousNet: Decimal
+        let delta: Decimal
+    }
+
+    struct WeeklyCategoryInsight {
+        let categoryID: UUID
+        let title: String
+        let symbolName: String
+        let iconColor: CategoryIconColor
+        let totalAmountUSD: Decimal
+    }
+
+    struct StreakRiskAlert: Identifiable {
+        let id: UUID
+        let categoryID: UUID
+        let title: String
+        let symbolName: String
+        let iconColor: CategoryIconColor
+        let type: CategoryType
+        let message: String
+        let severity: Int
     }
 
     private let ledgerService = LedgerService()
@@ -159,6 +185,7 @@ final class DashboardViewModel {
                     iconColor: category.resolvedIconColor,
                     type: category.resolvedType,
                     streakDays: streak,
+                    cadence: category.resolvedStreakCadence,
                     progressText: progressText(for: category, entries: entries, now: now)
                 )
             }
@@ -172,6 +199,196 @@ final class DashboardViewModel {
                 return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
             }
             .first
+    }
+
+    func weeklyTrend(
+        entries: [Entry],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> WeeklyTrend {
+        let today = calendar.startOfDay(for: now)
+        guard let currentStartAnchor = calendar.date(byAdding: .day, value: -6, to: today),
+              let previousStartAnchor = calendar.date(byAdding: .day, value: -7, to: currentStartAnchor)
+        else {
+            return WeeklyTrend(currentNet: .zeroValue, previousNet: .zeroValue, delta: .zeroValue)
+        }
+
+        let currentStart = calendar.startOfDay(for: currentStartAnchor)
+        let previousStart = calendar.startOfDay(for: previousStartAnchor)
+        let currentRange = DateInterval(start: currentStart, end: now.addingTimeInterval(1))
+        let previousRange = DateInterval(start: previousStart, end: currentStart)
+
+        let currentNet = entriesInRange(entries, range: currentRange).reduce(.zeroValue) { partialResult, entry in
+            (partialResult + entry.amountUSD).rounded(scale: 2)
+        }
+        let previousNet = entriesInRange(entries, range: previousRange).reduce(.zeroValue) { partialResult, entry in
+            (partialResult + entry.amountUSD).rounded(scale: 2)
+        }
+
+        return WeeklyTrend(
+            currentNet: currentNet,
+            previousNet: previousNet,
+            delta: (currentNet - previousNet).rounded(scale: 2)
+        )
+    }
+
+    func topWeeklyCategories(
+        entries: [Entry],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> (grind: WeeklyCategoryInsight?, chill: WeeklyCategoryInsight?) {
+        struct Bucket {
+            let categoryID: UUID
+            let title: String
+            let symbolName: String
+            let iconColor: CategoryIconColor
+            var grindTotal: Decimal
+            var chillTotal: Decimal
+        }
+
+        let weekRange = weekRange(for: now, calendar: calendar)
+        let weeklyEntries = entriesInRange(entries, range: weekRange)
+
+        var buckets: [UUID: Bucket] = [:]
+        for entry in weeklyEntries {
+            guard let category = entry.category else { continue }
+            let id = category.id
+
+            if buckets[id] == nil {
+                buckets[id] = Bucket(
+                    categoryID: id,
+                    title: category.title,
+                    symbolName: category.resolvedSymbolName,
+                    iconColor: category.resolvedIconColor,
+                    grindTotal: .zeroValue,
+                    chillTotal: .zeroValue
+                )
+            }
+
+            guard var bucket = buckets[id] else { continue }
+            if entry.amountUSD >= .zeroValue {
+                bucket.grindTotal = (bucket.grindTotal + entry.amountUSD).rounded(scale: 2)
+            } else {
+                bucket.chillTotal = (bucket.chillTotal + absolute(entry.amountUSD)).rounded(scale: 2)
+            }
+            buckets[id] = bucket
+        }
+
+        let grind = buckets.values
+            .filter { $0.grindTotal > .zeroValue }
+            .max { lhs, rhs in
+                if lhs.grindTotal != rhs.grindTotal {
+                    return lhs.grindTotal < rhs.grindTotal
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedDescending
+            }
+            .map { bucket in
+                WeeklyCategoryInsight(
+                    categoryID: bucket.categoryID,
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.grindTotal
+                )
+            }
+
+        let chill = buckets.values
+            .filter { $0.chillTotal > .zeroValue }
+            .max { lhs, rhs in
+                if lhs.chillTotal != rhs.chillTotal {
+                    return lhs.chillTotal < rhs.chillTotal
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedDescending
+            }
+            .map { bucket in
+                WeeklyCategoryInsight(
+                    categoryID: bucket.categoryID,
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.chillTotal
+                )
+            }
+
+        return (grind, chill)
+    }
+
+    func streakRiskAlerts(
+        categories: [Category],
+        entries: [Entry],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [StreakRiskAlert] {
+        var alerts: [StreakRiskAlert] = []
+
+        for category in categories where category.resolvedStreakEnabled {
+            let goal = Decimal(max(0, category.dailyGoalMinutes))
+            let progress = streakService.totalProgress(for: category, on: now, entries: entries)
+
+            switch category.resolvedType {
+            case .goodHabit:
+                let streak = streakService.streak(for: category, entries: entries, now: now, calendar: calendar)
+                guard streak > 0, goal > .zeroValue, progress < goal else { continue }
+
+                let remaining = (goal - progress).rounded(scale: 2)
+                let ratio = goal == .zeroValue ? .zeroValue : (remaining / goal).rounded(scale: 4)
+                let severity = ratio <= (Decimal(string: "0.25") ?? Decimal(0.25)) ? 3 : 2
+                let message = "Needs \(formatted(remaining, unit: category.resolvedUnit)) \(category.resolvedStreakCadence.progressLabel) to protect \(streak)\(category.resolvedStreakCadence.shortSuffix) streak."
+
+                alerts.append(
+                    StreakRiskAlert(
+                        id: category.id,
+                        categoryID: category.id,
+                        title: category.title,
+                        symbolName: category.resolvedSymbolName,
+                        iconColor: category.resolvedIconColor,
+                        type: .goodHabit,
+                        message: message,
+                        severity: severity
+                    )
+                )
+
+            case .quitHabit:
+                guard goal > .zeroValue, progress > .zeroValue else { continue }
+
+                let threshold70 = (goal * (Decimal(string: "0.7") ?? Decimal(0.7))).rounded(scale: 2)
+                let severity: Int
+                let message: String
+
+                if progress >= goal {
+                    severity = 3
+                    message = "Target exceeded \(category.resolvedStreakCadence.progressLabel): \(formatted(progress, unit: category.resolvedUnit)) / \(formatted(goal, unit: category.resolvedUnit))."
+                } else if progress >= threshold70 {
+                    severity = 2
+                    message = "Close to limit \(category.resolvedStreakCadence.progressLabel): \(formatted(progress, unit: category.resolvedUnit)) / \(formatted(goal, unit: category.resolvedUnit))."
+                } else {
+                    continue
+                }
+
+                alerts.append(
+                    StreakRiskAlert(
+                        id: category.id,
+                        categoryID: category.id,
+                        title: category.title,
+                        symbolName: category.resolvedSymbolName,
+                        iconColor: category.resolvedIconColor,
+                        type: .quitHabit,
+                        message: message,
+                        severity: severity
+                    )
+                )
+            }
+        }
+
+        return alerts.sorted { lhs, rhs in
+            if lhs.severity != rhs.severity {
+                return lhs.severity > rhs.severity
+            }
+            if lhs.type != rhs.type {
+                return lhs.type == .goodHabit
+            }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
     }
 
     func activityQuantityText(for activity: DailyActivity) -> String {
@@ -197,14 +414,15 @@ final class DashboardViewModel {
         let progress = streakService.totalProgress(for: category, on: now, entries: entries)
         let goal = Decimal(max(0, category.dailyGoalMinutes))
         let thresholdText = formatted(goal, unit: category.resolvedUnit)
+        let label = category.resolvedStreakCadence.progressLabel
 
         switch category.resolvedType {
         case .goodHabit:
-            return "\(formatted(progress, unit: category.resolvedUnit))/\(thresholdText) today"
+            return "\(formatted(progress, unit: category.resolvedUnit))/\(thresholdText) \(label)"
         case .quitHabit:
             return progress == .zeroValue
-                ? "No relapses today • Target < \(thresholdText)"
-                : "\(formatted(progress, unit: category.resolvedUnit)) logged today • Target < \(thresholdText)"
+                ? "No relapses \(label) • Target < \(thresholdText)"
+                : "\(formatted(progress, unit: category.resolvedUnit)) logged \(label) • Target < \(thresholdText)"
         }
     }
 
@@ -225,6 +443,22 @@ final class DashboardViewModel {
         entries.filter { entry in
             calendar.isDate(entry.timestamp, inSameDayAs: day)
         }
+    }
+
+    private func entriesInRange(_ entries: [Entry], range: DateInterval) -> [Entry] {
+        entries.filter { entry in
+            range.contains(entry.timestamp)
+        }
+    }
+
+    private func weekRange(for date: Date, calendar: Calendar) -> DateInterval {
+        if let week = calendar.dateInterval(of: .weekOfYear, for: date) {
+            return week
+        }
+        guard let fallbackStart = calendar.date(byAdding: .day, value: -6, to: date) else {
+            return DateInterval(start: date, end: date.addingTimeInterval(1))
+        }
+        return DateInterval(start: calendar.startOfDay(for: fallbackStart), end: date.addingTimeInterval(1))
     }
 
     private func activityQuantity(for entry: Entry, category: Category) -> Decimal {

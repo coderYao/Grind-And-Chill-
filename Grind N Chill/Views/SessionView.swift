@@ -56,8 +56,10 @@ struct SessionView: View {
                 Picker("Track", selection: $bindableViewModel.selectedCategoryID) {
                     ForEach(categories) { category in
                         HStack(spacing: 8) {
-                            Image(systemName: category.resolvedSymbolName)
-                                .foregroundStyle(category.resolvedIconColor.swiftUIColor)
+                            CategoryIconView(
+                                iconName: category.resolvedSymbolName,
+                                color: category.resolvedIconColor.swiftUIColor
+                            )
                             Text(category.title)
                         }
                             .tag(Optional(category.id))
@@ -138,6 +140,23 @@ struct SessionView: View {
                     Stepper(value: $bindableViewModel.manualCount, in: 1 ... 500) {
                         Text("Count: \(viewModel.manualCount)")
                     }
+
+                    quickActionRow(title: "Quick add") {
+                        Button("+1") {
+                            viewModel.incrementManualCount(by: 1)
+                        }
+                        .accessibilityIdentifier("session.quickCount.1")
+
+                        Button("+5") {
+                            viewModel.incrementManualCount(by: 5)
+                        }
+                        .accessibilityIdentifier("session.quickCount.5")
+
+                        Button("+10") {
+                            viewModel.incrementManualCount(by: 10)
+                        }
+                        .accessibilityIdentifier("session.quickCount.10")
+                    }
                 case .money:
                     HStack {
                         Text("Amount (USD)")
@@ -151,6 +170,23 @@ struct SessionView: View {
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 120)
+                    }
+
+                    quickActionRow(title: "Quick add") {
+                        Button("+$1") {
+                            viewModel.incrementManualAmount(by: Decimal(1))
+                        }
+                        .accessibilityIdentifier("session.quickAmount.1")
+
+                        Button("+$5") {
+                            viewModel.incrementManualAmount(by: Decimal(5))
+                        }
+                        .accessibilityIdentifier("session.quickAmount.5")
+
+                        Button("+$10") {
+                            viewModel.incrementManualAmount(by: Decimal(10))
+                        }
+                        .accessibilityIdentifier("session.quickAmount.10")
                     }
                 }
             } else {
@@ -192,5 +228,20 @@ struct SessionView: View {
         let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private func quickActionRow<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            content()
+                .buttonStyle(.bordered)
+                .font(.caption.weight(.semibold))
+        }
     }
 }

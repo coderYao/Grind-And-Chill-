@@ -35,6 +35,11 @@ enum LegacyDataRepairService {
                 repaired = true
             }
 
+            if StreakCadence(rawValue: category.streakCadenceRawValue ?? "") == nil {
+                category.streakCadenceRawValue = StreakCadence.daily.rawValue
+                repaired = true
+            }
+
             if category.badgeEnabled == nil {
                 category.badgeEnabled = true
                 repaired = true
@@ -259,7 +264,8 @@ enum SyncConflictResolverService {
         return [
             normalizedTitle,
             category.resolvedType.rawValue,
-            category.resolvedUnit.rawValue
+            category.resolvedUnit.rawValue,
+            category.resolvedStreakCadence.rawValue
         ].joined(separator: "|")
     }
 
@@ -281,6 +287,7 @@ enum SyncConflictResolverService {
         score += category.iconColor == nil ? 0 : 2
         score += category.hourlyRateUSD == nil ? 0 : 1
         score += category.usdPerCount == nil ? 0 : 1
+        score += category.streakCadenceRawValue == nil ? 0 : 1
         score += category.badgeMilestones?.isEmpty == false ? 1 : 0
         score += category.streakBonusSchedule?.isEmpty == false ? 1 : 0
         return score
@@ -301,6 +308,10 @@ enum SyncConflictResolverService {
 
         if primary.usdPerCount == nil, let usdPerCount = duplicate.usdPerCount {
             primary.usdPerCount = usdPerCount
+        }
+
+        if primary.streakCadenceRawValue == nil, let cadence = duplicate.streakCadenceRawValue {
+            primary.streakCadenceRawValue = cadence
         }
 
         if primary.badgeMilestones == nil, let badgeMilestones = duplicate.badgeMilestones {

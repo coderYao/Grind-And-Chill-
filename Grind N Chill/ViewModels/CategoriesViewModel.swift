@@ -32,6 +32,7 @@ final class CategoriesViewModel {
         let hourlyRateUSD: Double?
         let usdPerCount: Double?
         let dailyGoalMinutes: Int
+        let streakCadenceRawValue: String?
         let streakEnabled: Bool
         let badgeEnabled: Bool
         let badgeMilestones: String?
@@ -69,6 +70,7 @@ final class CategoriesViewModel {
     var symbolName: String = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
     var iconColor: CategoryIconColor = .green
     var dailyGoalMinutes: Int = 30
+    var streakCadence: StreakCadence = .daily
     var streakEnabled: Bool = true
     var badgeEnabled: Bool = true
     var badgeMilestonesInput: String = "3, 7, 30"
@@ -121,6 +123,7 @@ final class CategoriesViewModel {
         symbolName = CategorySymbolCatalog.normalizedSymbol(category.resolvedSymbolName, for: category.resolvedType)
         iconColor = category.resolvedIconColor
         dailyGoalMinutes = category.dailyGoalMinutes
+        streakCadence = category.resolvedStreakCadence
         streakEnabled = category.resolvedStreakEnabled
         badgeEnabled = category.resolvedBadgeEnabled
         let milestones = category.resolvedBadgeMilestones()
@@ -160,7 +163,7 @@ final class CategoriesViewModel {
         let normalizedMilestones: String?
         if streakEnabled, (badgeEnabled || streakBonusEnabled) {
             guard let milestones = parsedBadgeMilestones(from: badgeMilestonesInput) else {
-                latestError = "Milestones must be comma-separated positive days (example: 3, 7, 30)."
+                latestError = "Milestones must be comma-separated positive values (example: 3, 7, 30)."
                 return false
             }
             normalizedMilestones = milestones.map(String.init).joined(separator: ",")
@@ -172,7 +175,7 @@ final class CategoriesViewModel {
         let representativeBonusAmount: Double?
         if streakEnabled && streakBonusEnabled {
             guard let milestones = parsedBadgeMilestones(from: badgeMilestonesInput) else {
-                latestError = "Milestones must be comma-separated positive days (example: 3, 7, 30)."
+                latestError = "Milestones must be comma-separated positive values (example: 3, 7, 30)."
                 return false
             }
 
@@ -237,6 +240,7 @@ final class CategoriesViewModel {
             category.hourlyRateUSD = (unit == .time && timeConversionMode == .hourlyRate) ? hourlyRateUSD : nil
             category.usdPerCount = unit == .count ? usdPerCount : nil
             category.dailyGoalMinutes = dailyGoalMinutes
+            category.streakCadenceRawValue = streakCadence.rawValue
             category.streakEnabled = streakEnabled
             category.badgeEnabled = streakEnabled ? badgeEnabled : false
             category.badgeMilestones = normalizedMilestones
@@ -258,6 +262,7 @@ final class CategoriesViewModel {
                 hourlyRateUSD: (unit == .time && timeConversionMode == .hourlyRate) ? hourlyRateUSD : nil,
                 usdPerCount: unit == .count ? usdPerCount : nil,
                 streakEnabled: streakEnabled,
+                streakCadence: streakCadence,
                 badgeEnabled: streakEnabled ? badgeEnabled : false,
                 badgeMilestones: normalizedMilestones,
                 streakBonusEnabled: streakEnabled ? streakBonusEnabled : false,
@@ -324,6 +329,7 @@ final class CategoriesViewModel {
                         hourlyRateUSD: category.hourlyRateUSD,
                         usdPerCount: category.usdPerCount,
                         dailyGoalMinutes: category.dailyGoalMinutes,
+                        streakCadenceRawValue: category.streakCadenceRawValue,
                         streakEnabled: category.resolvedStreakEnabled,
                         badgeEnabled: category.resolvedBadgeEnabled,
                         badgeMilestones: category.badgeMilestones,
@@ -404,6 +410,7 @@ final class CategoriesViewModel {
                     hourlyRateUSD: snapshot.hourlyRateUSD,
                     usdPerCount: snapshot.usdPerCount,
                     streakEnabled: snapshot.streakEnabled,
+                    streakCadence: StreakCadence(rawValue: snapshot.streakCadenceRawValue ?? "") ?? .daily,
                     badgeEnabled: snapshot.badgeEnabled,
                     badgeMilestones: snapshot.badgeMilestones,
                     streakBonusEnabled: snapshot.streakBonusEnabled,
@@ -480,6 +487,7 @@ final class CategoriesViewModel {
         symbolName = CategorySymbolCatalog.defaultSymbol(for: .goodHabit)
         iconColor = CategoryIconColor.defaultColor(for: type)
         dailyGoalMinutes = 30
+        streakCadence = .daily
         streakEnabled = true
         badgeEnabled = true
         badgeMilestonesInput = "3, 7, 30"
@@ -515,6 +523,7 @@ final class CategoriesViewModel {
             return "Streak off"
         }
 
+        let cadence = category.resolvedStreakCadence
         let thresholdText: String
         switch category.resolvedUnit {
         case .time:
@@ -527,9 +536,9 @@ final class CategoriesViewModel {
 
         switch category.resolvedType {
         case .goodHabit:
-            return "Goal \(thresholdText)"
+            return "Goal \(thresholdText) \(cadence.thresholdQualifier)"
         case .quitHabit:
-            return "Target < \(thresholdText)"
+            return "Target < \(thresholdText) \(cadence.thresholdQualifier)"
         }
     }
 
@@ -550,25 +559,49 @@ final class CategoriesViewModel {
 
         switch type {
         case .goodHabit:
-            return "Daily Goal: \(thresholdText)"
+            return "\(streakCadence.goalLabelPrefix) Goal: \(thresholdText)"
         case .quitHabit:
-            return "Daily Target: < \(thresholdText)"
+            return "\(streakCadence.goalLabelPrefix) Target: < \(thresholdText)"
         }
     }
 
     func dailyGoalRange() -> ClosedRange<Int> {
-        switch unit {
-        case .time:
+        switch (unit, streakCadence) {
+        case (.time, .daily):
             return 0 ... 600
-        case .count:
+        case (.time, .weekly):
+            return 0 ... 4_200
+        case (.time, .monthly):
+            return 0 ... 18_000
+        case (.count, .daily):
             return 0 ... 500
-        case .money:
+        case (.count, .weekly):
+            return 0 ... 3_500
+        case (.count, .monthly):
+            return 0 ... 15_000
+        case (.money, .daily):
             return 0 ... 10_000
+        case (.money, .weekly):
+            return 0 ... 70_000
+        case (.money, .monthly):
+            return 0 ... 300_000
         }
     }
 
     func rewardMilestonesPreview() -> [Int] {
         parsedBadgeMilestones(from: badgeMilestonesInput) ?? []
+    }
+
+    func streakMilestonesFieldLabel() -> String {
+        "Milestones (\(streakCadence.bonusLabelUnit.lowercased())s)"
+    }
+
+    func streakMilestonesHelperText() -> String {
+        "Comma-separated \(streakCadence.bonusLabelUnit.lowercased()) milestones (example: 3, 7, 30)."
+    }
+
+    func streakBonusLabel(for milestone: Int) -> String {
+        "\(milestone)-\(streakCadence.bonusLabelUnit) Bonus"
     }
 
     func streakBonusAmount(for milestone: Int) -> Double {

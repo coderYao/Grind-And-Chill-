@@ -305,8 +305,7 @@ struct HistoryView: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 HStack(spacing: 6) {
-                    Image(systemName: symbolName)
-                        .foregroundStyle(iconColor)
+                    CategoryIconView(iconName: symbolName, color: iconColor)
                     Text(title)
                 }
                 .font(.headline)

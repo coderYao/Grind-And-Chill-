@@ -196,6 +196,18 @@ final class SessionViewModel {
         return category.title
     }
 
+    func incrementManualCount(by value: Int) {
+        guard value > 0 else { return }
+        manualCount = max(1, manualCount + value)
+    }
+
+    func incrementManualAmount(by value: Decimal) {
+        guard value > .zeroValue else { return }
+        let current = Decimal(string: String(manualAmountUSD)) ?? Decimal(manualAmountUSD)
+        let updated = (current + value).rounded(scale: 2)
+        manualAmountUSD = NSDecimalNumber(decimal: updated).doubleValue
+    }
+
     func liveAmountUSD(
         for category: Category?,
         elapsedSeconds: Int,

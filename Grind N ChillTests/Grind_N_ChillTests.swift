@@ -223,6 +223,26 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func sessionQuickLogActionsUpdateCountAndAmount() {
+        let viewModel = SessionViewModel()
+
+        viewModel.manualCount = 2
+        viewModel.incrementManualCount(by: 5)
+        #expect(viewModel.manualCount == 7)
+
+        viewModel.incrementManualCount(by: -1)
+        #expect(viewModel.manualCount == 7)
+
+        viewModel.manualAmountUSD = 1.25
+        viewModel.incrementManualAmount(by: Decimal(string: "2.35") ?? Decimal(2.35))
+        #expect(viewModel.manualAmountUSD == 3.6)
+
+        viewModel.incrementManualAmount(by: .zeroValue)
+        #expect(viewModel.manualAmountUSD == 3.6)
+    }
+
+    @Test
+    @MainActor
     func liveTimerAmountUsesElapsedSecondsAndCategorySign() {
         let viewModel = SessionViewModel()
 
@@ -321,6 +341,78 @@ struct Grind_N_ChillTests {
                 amountUSD: Decimal(-5),
                 category: category,
                 isManual: true
+            )
+        ]
+
+        let streak = StreakService().streak(for: category, entries: entries, now: now, calendar: calendar)
+        #expect(streak == 3)
+    }
+
+    @Test
+    func weeklyGoodHabitStreakCountsCompletedWeeks() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "Weekly Deep Work",
+            multiplier: 1,
+            type: .goodHabit,
+            dailyGoalMinutes: 120
+        )
+        category.streakCadenceRawValue = StreakCadence.weekly.rawValue
+
+        let now = date(year: 2026, month: 2, day: 20, hour: 12, minute: 0, calendar: calendar)
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 18, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 120,
+                amountUSD: Decimal(string: "36.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 130,
+                amountUSD: Decimal(string: "39.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 4, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 120,
+                amountUSD: Decimal(string: "36.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            )
+        ]
+
+        let streak = StreakService().streak(for: category, entries: entries, now: now, calendar: calendar)
+        #expect(streak == 3)
+    }
+
+    @Test
+    func monthlyQuitHabitStreakCountsFullCalendarMonths() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let category = Category(
+            title: "Monthly No Spend",
+            multiplier: 1,
+            type: .quitHabit,
+            dailyGoalMinutes: 0
+        )
+        category.streakCadenceRawValue = StreakCadence.monthly.rawValue
+
+        let now = date(year: 2026, month: 4, day: 20, hour: 8, minute: 0, calendar: calendar)
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 1, day: 31, hour: 23, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-8.00") ?? .zeroValue,
+                category: category,
+                isManual: true,
+                quantity: Decimal(8),
+                unit: .money
             )
         ]
 
@@ -519,6 +611,189 @@ struct Grind_N_ChillTests {
         #expect(highlight?.streakDays == 5)
         #expect(highlight?.type == .quitHabit)
         #expect(highlight?.progressText.contains("Target <") == true)
+    }
+
+    @Test
+    @MainActor
+    func dashboardWeeklyTrendComparesCurrentAndPreviousSevenDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let now = date(year: 2026, month: 2, day: 14, hour: 12, minute: 0, calendar: calendar)
+
+        let category = Category(
+            title: "General",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 14, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "20.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 20,
+                amountUSD: Decimal(string: "-5.00") ?? .zeroValue,
+                category: category,
+                isManual: true
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 5, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 20,
+                amountUSD: Decimal(string: "10.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 3, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 20,
+                amountUSD: Decimal(string: "-8.00") ?? .zeroValue,
+                category: category,
+                isManual: true
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let trend = viewModel.weeklyTrend(entries: entries, now: now, calendar: calendar)
+
+        #expect(trend.currentNet == (Decimal(string: "15.00") ?? .zeroValue))
+        #expect(trend.previousNet == (Decimal(string: "2.00") ?? .zeroValue))
+        #expect(trend.delta == (Decimal(string: "13.00") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func dashboardTopWeeklyCategoriesFindsTopGrindAndTopChill() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let now = date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar)
+
+        let grindTop = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+        let grindSecond = Category(
+            title: "Reading",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+        let chillTop = Category(
+            title: "Gaming",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "30.00") ?? .zeroValue,
+                category: grindTop,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 40,
+                amountUSD: Decimal(string: "20.00") ?? .zeroValue,
+                category: grindSecond,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 22, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-15.00") ?? .zeroValue,
+                category: chillTop,
+                isManual: true,
+                quantity: Decimal(15),
+                unit: .money
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let leaders = viewModel.topWeeklyCategories(entries: entries, now: now, calendar: calendar)
+
+        #expect(leaders.grind?.title == "Deep Work")
+        #expect(leaders.grind?.totalAmountUSD == (Decimal(string: "30.00") ?? .zeroValue))
+        #expect(leaders.chill?.title == "Gaming")
+        #expect(leaders.chill?.totalAmountUSD == (Decimal(string: "15.00") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
+    func dashboardStreakRiskAlertsDetectsGoodAndChillRisks() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let now = date(year: 2026, month: 2, day: 14, hour: 12, minute: 0, calendar: calendar)
+
+        let grindCategory = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        let chillCategory = Category(
+            title: "Gaming",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 10,
+            unit: .time
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 13, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 12, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 14, hour: 8, minute: 0, calendar: calendar),
+                durationMinutes: 45,
+                amountUSD: Decimal(string: "13.50") ?? .zeroValue,
+                category: grindCategory,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 14, hour: 11, minute: 0, calendar: calendar),
+                durationMinutes: 8,
+                amountUSD: Decimal(string: "-2.40") ?? .zeroValue,
+                category: chillCategory,
+                isManual: true
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let alerts = viewModel.streakRiskAlerts(
+            categories: [grindCategory, chillCategory],
+            entries: entries,
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(alerts.count == 2)
+        #expect(alerts[0].categoryID == grindCategory.id)
+        #expect(alerts[0].severity == 3)
+        #expect(alerts[0].message.contains("Needs 15m") == true)
+        #expect(alerts.contains(where: { $0.categoryID == chillCategory.id && $0.severity == 2 }))
     }
 
     @Test
@@ -1622,6 +1897,65 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func weeklyBadgeAwardsAreIdempotentWithinSameWeek() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let firstDay = date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar)
+        let laterSameWeek = date(year: 2026, month: 2, day: 13, hour: 18, minute: 0, calendar: calendar)
+
+        let category = Category(
+            title: "Weekly Badge",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            badgeMilestones: "1"
+        )
+        category.streakCadenceRawValue = StreakCadence.weekly.rawValue
+        modelContext.insert(category)
+
+        let entries = [
+            Entry(
+                timestamp: firstDay,
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: category,
+                isManual: false
+            )
+        ]
+        entries.forEach(modelContext.insert)
+        try modelContext.save()
+
+        var badgeService = BadgeService()
+        badgeService.milestones = [1]
+
+        let firstAwards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: firstDay,
+            calendar: calendar
+        )
+        #expect(firstAwards.count == 1)
+
+        let secondAwards = try badgeService.awardBadgesIfNeeded(
+            for: category,
+            entries: entries,
+            modelContext: modelContext,
+            now: laterSameWeek,
+            calendar: calendar
+        )
+        #expect(secondAwards.isEmpty)
+
+        let awardCount = try modelContext.fetchCount(FetchDescriptor<BadgeAward>())
+        #expect(awardCount == 1)
+    }
+
+    @Test
+    @MainActor
     func deletingActiveCategoryIsBlocked() throws {
         let container = try makeInMemoryContainer()
         let modelContext = ModelContext(container)
@@ -1848,6 +2182,7 @@ struct Grind_N_ChillTests {
         viewModel.type = .goodHabit
         viewModel.iconColor = .teal
         viewModel.dailyGoalMinutes = 75
+        viewModel.streakCadence = .weekly
         viewModel.streakEnabled = true
         viewModel.badgeEnabled = true
         viewModel.badgeMilestonesInput = "3, 10, 20"
@@ -1864,6 +2199,7 @@ struct Grind_N_ChillTests {
         )
         #expect(categoriesAfterCreate.count == 1)
         #expect(categoriesAfterCreate.first?.title == "Writing")
+        #expect(categoriesAfterCreate.first?.resolvedStreakCadence == .weekly)
 
         guard let savedCategory = categoriesAfterCreate.first else {
             Issue.record("Expected one created category.")
@@ -1880,6 +2216,7 @@ struct Grind_N_ChillTests {
         viewModel.multiplier = 1.4
         viewModel.iconColor = .pink
         viewModel.dailyGoalMinutes = 90
+        viewModel.streakCadence = .monthly
         viewModel.streakEnabled = false
         viewModel.badgeEnabled = true
         viewModel.badgeMilestonesInput = "5, 9"
@@ -1901,6 +2238,7 @@ struct Grind_N_ChillTests {
         #expect(categoriesAfterEdit.first?.multiplier == 1.4)
         #expect(categoriesAfterEdit.first?.dailyGoalMinutes == 90)
         #expect(categoriesAfterEdit.first?.iconColor == .pink)
+        #expect(categoriesAfterEdit.first?.resolvedStreakCadence == .monthly)
         #expect(categoriesAfterEdit.first?.resolvedStreakEnabled == false)
         #expect(categoriesAfterEdit.first?.resolvedBadgeEnabled == false)
         #expect(categoriesAfterEdit.first?.resolvedStreakBonusEnabled == false)
@@ -1980,6 +2318,7 @@ struct Grind_N_ChillTests {
         #expect(fetched[0].multiplier == 1)
         #expect(fetched[0].dailyGoalMinutes == 0)
         #expect(fetched[0].resolvedStreakEnabled == true)
+        #expect(fetched[0].resolvedStreakCadence == .daily)
         #expect(fetched[0].resolvedBadgeEnabled == true)
         #expect(fetched[0].resolvedStreakBonusEnabled == false)
         #expect(fetched[0].symbolName == CategorySymbolCatalog.defaultSymbol(for: .goodHabit))

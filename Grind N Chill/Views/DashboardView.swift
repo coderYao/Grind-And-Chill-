@@ -16,7 +16,9 @@ struct DashboardView: View {
                 balanceCard
                 dailyLedgerChangeCard
                 dailyActivitiesCard
+                trendInsightsCard
                 streakHighlightCard
+                streakRiskAlertsCard
                 activeSessionCard
                 badgeCard
             }
@@ -110,8 +112,10 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         ForEach(Array(activities.prefix(5))) { activity in
                             HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: activity.symbolName)
-                                    .foregroundStyle(activity.iconColor.swiftUIColor)
+                                CategoryIconView(
+                                    iconName: activity.symbolName,
+                                    color: activity.iconColor.swiftUIColor
+                                )
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(activity.title)
@@ -186,8 +190,10 @@ struct DashboardView: View {
                         now: context.date
                     ) {
                         HStack(spacing: 10) {
-                            Image(systemName: highlight.symbolName)
-                                .foregroundStyle(highlight.iconColor.swiftUIColor)
+                            CategoryIconView(
+                                iconName: highlight.symbolName,
+                                color: highlight.iconColor.swiftUIColor
+                            )
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(highlight.title)
@@ -199,12 +205,121 @@ struct DashboardView: View {
 
                             Spacer()
 
-                            Text("\(highlight.streakDays)d")
+                            Text("\(highlight.streakDays)\(highlight.cadence.shortSuffix)")
                                 .font(.title3.weight(.bold))
                         }
                     } else {
                         Text("No active streak yet. Hit your Grind target or keep Chill below the threshold today.")
                             .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var trendInsightsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Trend Insights")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let trend = viewModel.weeklyTrend(entries: entries, now: context.date)
+                let leaders = viewModel.topWeeklyCategories(entries: entries, now: context.date)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Last 7 Days Net")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(trend.currentNet.formatted(.currency(code: "USD")))
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(Self.amountColor(for: trend.currentNet))
+                    }
+
+                    HStack(spacing: 6) {
+                        Text("vs previous 7 days:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(trend.delta.formatted(.currency(code: "USD")))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Self.amountColor(for: trend.delta))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        insightRow(
+                            title: "Top Grind",
+                            insight: leaders.grind,
+                            amountSign: .positive
+                        )
+                        insightRow(
+                            title: "Top Chill",
+                            insight: leaders.chill,
+                            amountSign: .negative
+                        )
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var streakRiskAlertsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Streak Risk Alerts")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let alerts = viewModel.streakRiskAlerts(
+                    categories: categories,
+                    entries: entries,
+                    now: context.date
+                )
+
+                if alerts.isEmpty {
+                    Text("No streaks at risk right now.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(alerts.prefix(3))) { alert in
+                            HStack(alignment: .top, spacing: 10) {
+                                CategoryIconView(
+                                    iconName: alert.symbolName,
+                                    color: alert.iconColor.swiftUIColor
+                                )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(alert.title)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(Self.typeLabel(for: alert.type))
+                                            .font(.caption2.weight(.semibold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color(.tertiarySystemFill), in: Capsule())
+                                    }
+                                    Text(alert.message)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Text(Self.severityLabel(for: alert.severity))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(alert.severity >= 3 ? .red : .orange)
+                            }
+                        }
+
+                        if alerts.count > 3 {
+                            Text("+\(alerts.count - 3) more risk alerts")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -220,7 +335,7 @@ struct DashboardView: View {
                 .font(.headline)
 
             if badgeAwards.isEmpty {
-                Text("No badges yet. Hit a streak milestone (3, 7, 30 days).")
+                Text("No badges yet. Hit a streak milestone (3, 7, 30).")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(badgeAwards.prefix(5), id: \.awardKey) { award in
@@ -256,7 +371,17 @@ struct DashboardView: View {
             return key
         }
 
-        return "\(milestone)-day streak"
+        let periodKey = String(parts[3])
+        let unit: String
+        if periodKey.hasPrefix("w") {
+            unit = "week"
+        } else if periodKey.hasPrefix("m") {
+            unit = "month"
+        } else {
+            unit = "day"
+        }
+
+        return "\(milestone)-\(unit) streak"
     }
 
     private static func amountColor(for amount: Decimal) -> Color {
@@ -279,6 +404,46 @@ struct DashboardView: View {
             return "Grind"
         case .quitHabit:
             return "Chill"
+        }
+    }
+
+    private static func severityLabel(for severity: Int) -> String {
+        severity >= 3 ? "High" : "Watch"
+    }
+
+    private enum AmountSign {
+        case positive
+        case negative
+    }
+
+    private func insightRow(
+        title: String,
+        insight: DashboardViewModel.WeeklyCategoryInsight?,
+        amountSign: AmountSign
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let insight {
+                CategoryIconView(
+                    iconName: insight.symbolName,
+                    color: insight.iconColor.swiftUIColor
+                )
+                Text(insight.title)
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                let amount = amountSign == .negative ? (insight.totalAmountUSD * Decimal(-1)) : insight.totalAmountUSD
+                Text(amount.formatted(.currency(code: "USD")))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(amountSign == .negative ? .red : .green)
+            } else {
+                Spacer()
+                Text("No data")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

@@ -1,6 +1,80 @@
 import Foundation
 import SwiftData
 
+enum StreakCadence: String, Codable, CaseIterable, Identifiable {
+    case daily
+    case weekly
+    case monthly
+
+    var id: String { rawValue }
+
+    var displayTitle: String {
+        switch self {
+        case .daily:
+            return "Daily"
+        case .weekly:
+            return "Weekly"
+        case .monthly:
+            return "Monthly"
+        }
+    }
+
+    var progressLabel: String {
+        switch self {
+        case .daily:
+            return "today"
+        case .weekly:
+            return "this week"
+        case .monthly:
+            return "this month"
+        }
+    }
+
+    var goalLabelPrefix: String {
+        switch self {
+        case .daily:
+            return "Daily"
+        case .weekly:
+            return "Weekly"
+        case .monthly:
+            return "Monthly"
+        }
+    }
+
+    var thresholdQualifier: String {
+        switch self {
+        case .daily:
+            return "/day"
+        case .weekly:
+            return "/week"
+        case .monthly:
+            return "/month"
+        }
+    }
+
+    var bonusLabelUnit: String {
+        switch self {
+        case .daily:
+            return "Day"
+        case .weekly:
+            return "Week"
+        case .monthly:
+            return "Month"
+        }
+    }
+
+    var shortSuffix: String {
+        switch self {
+        case .daily:
+            return "d"
+        case .weekly:
+            return "w"
+        case .monthly:
+            return "m"
+        }
+    }
+}
+
 @Model
 final class Category {
     var id: UUID = UUID()
@@ -12,6 +86,7 @@ final class Category {
     var hourlyRateUSD: Double?
     var usdPerCount: Double?
     var dailyGoalMinutes: Int = 0
+    var streakCadenceRawValue: String?
     var streakEnabled: Bool?
     var badgeEnabled: Bool?
     var badgeMilestones: String?
@@ -35,6 +110,7 @@ final class Category {
         hourlyRateUSD: Double? = nil,
         usdPerCount: Double? = nil,
         streakEnabled: Bool = true,
+        streakCadence: StreakCadence = .daily,
         badgeEnabled: Bool = true,
         badgeMilestones: String? = nil,
         streakBonusEnabled: Bool = false,
@@ -50,6 +126,7 @@ final class Category {
         self.hourlyRateUSD = hourlyRateUSD
         self.usdPerCount = usdPerCount
         self.dailyGoalMinutes = dailyGoalMinutes
+        self.streakCadenceRawValue = streakCadence.rawValue
         self.streakEnabled = streakEnabled
         self.badgeEnabled = badgeEnabled
         self.badgeMilestones = badgeMilestones
@@ -93,6 +170,14 @@ final class Category {
 
     var resolvedStreakEnabled: Bool {
         streakEnabled ?? true
+    }
+
+    var resolvedStreakCadence: StreakCadence {
+        guard let rawValue = streakCadenceRawValue,
+              let cadence = StreakCadence(rawValue: rawValue) else {
+            return .daily
+        }
+        return cadence
     }
 
     var resolvedBadgeEnabled: Bool {

@@ -251,6 +251,10 @@ enum GrindNChillMigrationPlan: SchemaMigrationPlan {
                 category.streakEnabled = true
                 summary.categoriesRepaired += 1
             }
+            if StreakCadence(rawValue: category.streakCadenceRawValue ?? "") == nil {
+                category.streakCadenceRawValue = StreakCadence.daily.rawValue
+                summary.categoriesRepaired += 1
+            }
             if category.badgeEnabled == nil {
                 category.badgeEnabled = true
                 summary.categoriesRepaired += 1
@@ -521,11 +525,36 @@ enum ModelContainerFactory {
 
 #if DEBUG
     private static func recoverFromIncompatibleStore() -> Bool {
-        removeDefaultStoreArtifacts()
+        guard shouldAllowStoreRecoveryReset() else {
+            print(
+                """
+                SwiftData store failed to load and auto-reset is disabled.
+                To allow one-time recovery reset, launch with -allow-store-recovery-reset
+                or set GNC_ALLOW_STORE_RECOVERY_RESET=1.
+                """
+            )
+            return false
+        }
+
+        return removeDefaultStoreArtifacts()
     }
 
     private static func shouldResetForUITests() -> Bool {
         ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-store")
+    }
+
+    private static func shouldAllowStoreRecoveryReset() -> Bool {
+        let processInfo = ProcessInfo.processInfo
+
+        if shouldResetForUITests() {
+            return true
+        }
+
+        if processInfo.arguments.contains("-allow-store-recovery-reset") {
+            return true
+        }
+
+        return processInfo.environment["GNC_ALLOW_STORE_RECOVERY_RESET"] == "1"
     }
 
     private static func removeDefaultStoreArtifacts() -> Bool {

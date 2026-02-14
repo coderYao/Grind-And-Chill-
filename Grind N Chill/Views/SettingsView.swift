@@ -59,7 +59,7 @@ struct SettingsView: View {
 
             Section("How It Works") {
                 Text("Grind time adds money to your ledger. Chill time subtracts money.")
-                Text("Streaks are calendar-based and recalculate automatically after midnight.")
+                Text("Streaks are calendar-based and recalculate automatically at day, week, or month boundaries.")
             }
         }
         .navigationTitle("Settings")

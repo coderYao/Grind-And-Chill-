@@ -47,8 +47,10 @@ struct CategoryListView: View {
                         viewModel.beginEditing(category)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: category.resolvedSymbolName)
-                                .foregroundStyle(category.resolvedIconColor.swiftUIColor)
+                            CategoryIconView(
+                                iconName: category.resolvedSymbolName,
+                                color: category.resolvedIconColor.swiftUIColor
+                            )
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(category.title)
@@ -141,9 +143,11 @@ private struct CategoryEditorSheet: View {
                             Button {
                                 viewModel.symbolName = symbol
                             } label: {
-                                Image(systemName: symbol)
-                                    .font(.title3)
-                                    .foregroundStyle(viewModel.iconColor.swiftUIColor)
+                                CategoryIconView(
+                                    iconName: symbol,
+                                    color: viewModel.iconColor.swiftUIColor,
+                                    font: .title3
+                                )
                                     .frame(maxWidth: .infinity, minHeight: 36)
                                     .padding(.vertical, 4)
                                     .background(
@@ -272,6 +276,15 @@ private struct CategoryEditorSheet: View {
                         .accessibilityIdentifier("categoryEditor.streakEnabled")
 
                     if viewModel.streakEnabled {
+                        Picker("Cadence", selection: $viewModel.streakCadence) {
+                            ForEach(StreakCadence.allCases) { cadence in
+                                Text(cadence.displayTitle)
+                                    .tag(cadence)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("categoryEditor.streakCadence")
+
                         Toggle("Award Badges", isOn: $viewModel.badgeEnabled)
                             .accessibilityIdentifier("categoryEditor.badgeEnabled")
 
@@ -289,7 +302,7 @@ private struct CategoryEditorSheet: View {
 
                             ForEach(milestones, id: \.self) { milestone in
                                 HStack {
-                                    Text("\(milestone)-Day Bonus")
+                                    Text(viewModel.streakBonusLabel(for: milestone))
                                     Spacer()
                                     TextField(
                                         "USD",
@@ -308,13 +321,13 @@ private struct CategoryEditorSheet: View {
                         }
 
                         if viewModel.badgeEnabled || viewModel.streakBonusEnabled {
-                            TextField("Milestones (days)", text: $viewModel.badgeMilestonesInput)
+                            TextField(viewModel.streakMilestonesFieldLabel(), text: $viewModel.badgeMilestonesInput)
                                 .keyboardType(.numbersAndPunctuation)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .accessibilityIdentifier("categoryEditor.badgeMilestones")
 
-                            Text("Comma-separated days for streak rewards (example: 3, 7, 30).")
+                            Text(viewModel.streakMilestonesHelperText())
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

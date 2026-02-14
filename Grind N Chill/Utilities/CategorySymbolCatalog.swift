@@ -9,7 +9,10 @@ enum CategorySymbolCatalog {
         "checkmark.seal.fill",
         "dumbbell.fill",
         "sun.max.fill",
-        "fork.knife"
+        "fork.knife",
+        "bag.fill",
+        "cart.fill",
+        "🛍️"
     ]
 
     private static let quitHabitSymbols = [
@@ -20,7 +23,11 @@ enum CategorySymbolCatalog {
         "cup.and.saucer.fill",
         "sparkles",
         "hourglass",
-        "moon.zzz.fill"
+        "moon.zzz.fill",
+        "creditcard.fill",
+        "cart.fill.badge.minus",
+        "🛍️",
+        "🛒"
     ]
 
     static func symbols(for type: CategoryType) -> [String] {
