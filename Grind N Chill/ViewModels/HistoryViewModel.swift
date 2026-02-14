@@ -77,6 +77,15 @@ final class HistoryViewModel {
         }
     }
 
+    struct CategoryMoneySlice: Identifiable {
+        let id: String
+        let title: String
+        let symbolName: String
+        let iconColor: CategoryIconColor?
+        let totalAmountUSD: Decimal
+        let entryCount: Int
+    }
+
     struct ManualEntryDraft: Identifiable, Equatable {
         let id: UUID
         let categoryTitle: String
@@ -213,6 +222,101 @@ final class HistoryViewModel {
         }
     }
 
+    func categoryMoneyBreakdown(
+        from entries: [Entry]
+    ) -> (grind: [CategoryMoneySlice], chill: [CategoryMoneySlice], grindTotal: Decimal, chillTotal: Decimal) {
+        struct Bucket {
+            let id: String
+            let title: String
+            let symbolName: String
+            let iconColor: CategoryIconColor?
+            var grindTotal: Decimal
+            var chillTotal: Decimal
+            var grindEntryCount: Int
+            var chillEntryCount: Int
+        }
+
+        var buckets: [String: Bucket] = [:]
+
+        for entry in entries {
+            let categoryID = entry.category?.id.uuidString ?? "unknown"
+            let title = entry.category?.title ?? "Unknown Category"
+            let symbol = entry.category?.resolvedSymbolName ?? "tray"
+            let color = entry.category?.resolvedIconColor
+            let bucketID = "\(categoryID)|\(title)"
+
+            if buckets[bucketID] == nil {
+                buckets[bucketID] = Bucket(
+                    id: bucketID,
+                    title: title,
+                    symbolName: symbol,
+                    iconColor: color,
+                    grindTotal: .zeroValue,
+                    chillTotal: .zeroValue,
+                    grindEntryCount: 0,
+                    chillEntryCount: 0
+                )
+            }
+
+            guard var bucket = buckets[bucketID] else { continue }
+            if entry.amountUSD >= .zeroValue {
+                bucket.grindTotal = (bucket.grindTotal + entry.amountUSD).rounded(scale: 2)
+                bucket.grindEntryCount += 1
+            } else {
+                bucket.chillTotal = (bucket.chillTotal + absolute(entry.amountUSD)).rounded(scale: 2)
+                bucket.chillEntryCount += 1
+            }
+            buckets[bucketID] = bucket
+        }
+
+        let grind = buckets.values
+            .filter { $0.grindTotal > .zeroValue }
+            .map { bucket in
+                CategoryMoneySlice(
+                    id: "grind:\(bucket.id)",
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.grindTotal,
+                    entryCount: bucket.grindEntryCount
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.totalAmountUSD != rhs.totalAmountUSD {
+                    return lhs.totalAmountUSD > rhs.totalAmountUSD
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+        let chill = buckets.values
+            .filter { $0.chillTotal > .zeroValue }
+            .map { bucket in
+                CategoryMoneySlice(
+                    id: "chill:\(bucket.id)",
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.chillTotal,
+                    entryCount: bucket.chillEntryCount
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.totalAmountUSD != rhs.totalAmountUSD {
+                    return lhs.totalAmountUSD > rhs.totalAmountUSD
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+        let grindTotal = grind.reduce(.zeroValue) { partialResult, slice in
+            (partialResult + slice.totalAmountUSD).rounded(scale: 2)
+        }
+        let chillTotal = chill.reduce(.zeroValue) { partialResult, slice in
+            (partialResult + slice.totalAmountUSD).rounded(scale: 2)
+        }
+
+        return (grind, chill, grindTotal, chillTotal)
+    }
+
     func dailySummaryCSV(from summaries: [DailySummary], calendar: Calendar = .current) -> String {
         var lines = ["date,ledgerChangeUSD,gainUSD,spentUSD,entryCount"]
         let exportSummaries = exportDailySummaries(from: summaries, calendar: calendar)
@@ -325,8 +429,10 @@ final class HistoryViewModel {
         }
     }
 
-    func manualDraft(for entry: Entry) -> ManualEntryDraft? {
-        guard entry.isManual else { return nil }
+    func entryDraft(for entry: Entry) -> ManualEntryDraft? {
+        if entry.bonusKey != nil {
+            return nil
+        }
 
         let categoryType = entry.category?.resolvedType ?? .goodHabit
         let unit = entry.resolvedUnit
@@ -371,8 +477,12 @@ final class HistoryViewModel {
         }
     }
 
+    func manualDraft(for entry: Entry) -> ManualEntryDraft? {
+        entryDraft(for: entry)
+    }
+
     @discardableResult
-    func saveManualEdit(
+    func saveEntryEdit(
         _ draft: ManualEntryDraft,
         entries: [Entry],
         modelContext: ModelContext,
@@ -384,9 +494,9 @@ final class HistoryViewModel {
             return false
         }
 
-        guard entry.isManual else {
+        guard entry.bonusKey == nil else {
             latestStatus = nil
-            latestError = "Only manual entries can be edited."
+            latestError = "Streak bonus entries can't be edited."
             return false
         }
 
@@ -440,7 +550,7 @@ final class HistoryViewModel {
 
         do {
             try modelContext.save()
-            latestStatus = "Manual entry updated."
+            latestStatus = "Entry updated."
             latestError = nil
             return true
         } catch {
@@ -448,6 +558,21 @@ final class HistoryViewModel {
             latestError = "Could not save edited entry: \(error.localizedDescription)"
             return false
         }
+    }
+
+    @discardableResult
+    func saveManualEdit(
+        _ draft: ManualEntryDraft,
+        entries: [Entry],
+        modelContext: ModelContext,
+        usdPerHour: Decimal
+    ) -> Bool {
+        saveEntryEdit(
+            draft,
+            entries: entries,
+            modelContext: modelContext,
+            usdPerHour: usdPerHour
+        )
     }
 
     func importJSONData(

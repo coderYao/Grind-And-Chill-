@@ -548,6 +548,95 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func dashboardDailyCategoryMoneyBreakdownSplitsGrindAndChillByCategory() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let now = date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar)
+
+        let deepWork = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        let snacks = Category(
+            title: "Snacks",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 10,
+            unit: .money
+        )
+        let gaming = Category(
+            title: "Gaming",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 60,
+                amountUSD: Decimal(string: "18.00") ?? .zeroValue,
+                category: deepWork,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: deepWork,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 30, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-4.50") ?? .zeroValue,
+                category: snacks,
+                isManual: true,
+                quantity: Decimal(string: "4.50"),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 11, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-8.00") ?? .zeroValue,
+                category: gaming,
+                isManual: true,
+                quantity: Decimal(8),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 10, hour: 11, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-20.00") ?? .zeroValue,
+                category: gaming,
+                isManual: true,
+                quantity: Decimal(20),
+                unit: .money
+            )
+        ]
+
+        let viewModel = DashboardViewModel()
+        let breakdown = viewModel.dailyCategoryMoneyBreakdown(entries: entries, on: now, calendar: calendar)
+
+        #expect(breakdown.grind.count == 1)
+        #expect(breakdown.grind[0].title == "Deep Work")
+        #expect(breakdown.grind[0].totalAmountUSD == (Decimal(string: "27.00") ?? .zeroValue))
+        #expect(breakdown.grind[0].entryCount == 2)
+
+        #expect(breakdown.chill.count == 2)
+        #expect(breakdown.chill[0].title == "Gaming")
+        #expect(breakdown.chill[0].totalAmountUSD == (Decimal(string: "8.00") ?? .zeroValue))
+        #expect(breakdown.chill[1].title == "Snacks")
+        #expect(breakdown.chill[1].totalAmountUSD == (Decimal(string: "4.50") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
     func dashboardStreakHighlightChoosesHighestActiveStreak() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -1041,6 +1130,83 @@ struct Grind_N_ChillTests {
 
     @Test
     @MainActor
+    func historyCategoryMoneyBreakdownSplitsAndSortsByCategoryAmount() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let deepWork = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60
+        )
+        let reading = Category(
+            title: "Reading",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+        let snacks = Category(
+            title: "Snacks",
+            multiplier: 1.0,
+            type: .quitHabit,
+            dailyGoalMinutes: 15,
+            unit: .money
+        )
+
+        let entries = [
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 9, minute: 0, calendar: calendar),
+                durationMinutes: 45,
+                amountUSD: Decimal(string: "13.50") ?? .zeroValue,
+                category: deepWork,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 10, minute: 0, calendar: calendar),
+                durationMinutes: 30,
+                amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+                category: reading,
+                isManual: false
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 11, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-6.00") ?? .zeroValue,
+                category: snacks,
+                isManual: true,
+                quantity: Decimal(6),
+                unit: .money
+            ),
+            Entry(
+                timestamp: date(year: 2026, month: 2, day: 11, hour: 12, minute: 0, calendar: calendar),
+                durationMinutes: 0,
+                amountUSD: Decimal(string: "-2.00") ?? .zeroValue,
+                category: snacks,
+                isManual: true,
+                quantity: Decimal(2),
+                unit: .money
+            )
+        ]
+
+        let viewModel = HistoryViewModel()
+        let breakdown = viewModel.categoryMoneyBreakdown(from: entries)
+
+        #expect(breakdown.grind.count == 2)
+        #expect(breakdown.grind[0].title == "Deep Work")
+        #expect(breakdown.grind[0].totalAmountUSD == (Decimal(string: "13.50") ?? .zeroValue))
+        #expect(breakdown.grind[1].title == "Reading")
+        #expect(breakdown.grindTotal == (Decimal(string: "22.50") ?? .zeroValue))
+
+        #expect(breakdown.chill.count == 1)
+        #expect(breakdown.chill[0].title == "Snacks")
+        #expect(breakdown.chill[0].totalAmountUSD == (Decimal(string: "8.00") ?? .zeroValue))
+        #expect(breakdown.chill[0].entryCount == 2)
+        #expect(breakdown.chillTotal == (Decimal(string: "8.00") ?? .zeroValue))
+    }
+
+    @Test
+    @MainActor
     func historyDailySummaryCSVExportIncludesExpectedColumns() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
@@ -1185,7 +1351,113 @@ struct Grind_N_ChillTests {
         #expect(persistedEntries[0].amountUSD == (Decimal(string: "-6.75") ?? .zeroValue))
         #expect(persistedEntries[0].quantity == (Decimal(string: "6.75") ?? .zeroValue))
         #expect(persistedEntries[0].note == "updated note")
-        #expect(viewModel.latestStatus == "Manual entry updated.")
+        #expect(viewModel.latestStatus == "Entry updated.")
+    }
+
+    @Test
+    @MainActor
+    func historyTimerEntryEditRecalculatesAmountAndKeepsNonManualFlag() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Deep Work",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 60,
+            unit: .time
+        )
+        modelContext.insert(category)
+
+        let entry = Entry(
+            timestamp: Date(timeIntervalSinceReferenceDate: 100_500),
+            durationMinutes: 30,
+            amountUSD: Decimal(string: "9.00") ?? .zeroValue,
+            category: category,
+            note: "old timer note",
+            isManual: false,
+            quantity: Decimal(30),
+            unit: .time
+        )
+        modelContext.insert(entry)
+        try modelContext.save()
+
+        let viewModel = HistoryViewModel()
+        guard var draft = viewModel.entryDraft(for: entry) else {
+            Issue.record("Expected timer entry draft.")
+            return
+        }
+
+        draft.durationMinutes = 45
+        draft.note = "updated timer note"
+
+        let saved = viewModel.saveEntryEdit(
+            draft,
+            entries: [entry],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+        #expect(saved == true)
+
+        let persistedEntries = try modelContext.fetch(FetchDescriptor<Entry>())
+        #expect(persistedEntries.count == 1)
+        #expect(persistedEntries[0].amountUSD == (Decimal(string: "13.5") ?? .zeroValue))
+        #expect(persistedEntries[0].quantity == Decimal(45))
+        #expect(persistedEntries[0].note == "updated timer note")
+        #expect(persistedEntries[0].isManual == false)
+        #expect(viewModel.latestStatus == "Entry updated.")
+    }
+
+    @Test
+    @MainActor
+    func historyBonusEntryDoesNotExposeDraftOrSave() throws {
+        let container = try makeInMemoryContainer()
+        let modelContext = ModelContext(container)
+
+        let category = Category(
+            title: "Bonus Category",
+            multiplier: 1.0,
+            type: .goodHabit,
+            dailyGoalMinutes: 30
+        )
+        modelContext.insert(category)
+
+        let entry = Entry(
+            timestamp: Date(timeIntervalSinceReferenceDate: 100_700),
+            durationMinutes: 0,
+            amountUSD: Decimal(string: "2.50") ?? .zeroValue,
+            category: category,
+            note: "bonus",
+            bonusKey: "streak:bonus:3:2026-02-14",
+            isManual: true,
+            quantity: Decimal(string: "2.50"),
+            unit: .money
+        )
+        modelContext.insert(entry)
+        try modelContext.save()
+
+        let viewModel = HistoryViewModel()
+        #expect(viewModel.entryDraft(for: entry) == nil)
+
+        let fallbackDraft = HistoryViewModel.ManualEntryDraft(
+            id: entry.id,
+            categoryTitle: category.title,
+            unit: .money,
+            categoryType: category.resolvedType,
+            amountInput: 3.0,
+            countInput: 3.0,
+            durationMinutes: 0,
+            note: "try save"
+        )
+        let saved = viewModel.saveEntryEdit(
+            fallbackDraft,
+            entries: [entry],
+            modelContext: modelContext,
+            usdPerHour: Decimal(18)
+        )
+
+        #expect(saved == false)
+        #expect(viewModel.latestError == "Streak bonus entries can't be edited.")
     }
 
     @Test
@@ -1737,9 +2009,54 @@ struct Grind_N_ChillTests {
 
         #expect(defaults.string(forKey: AppStorageKeys.activeCategoryID) == nil)
         #expect(defaults.object(forKey: AppStorageKeys.activeStartTime) == nil)
+        #expect(defaults.object(forKey: AppStorageKeys.activeElapsedSeconds) == nil)
+        #expect(defaults.object(forKey: AppStorageKeys.activeIsPaused) == nil)
+        #expect(defaults.object(forKey: AppStorageKeys.activeRunningSegmentStartTime) == nil)
 
         let reset = TimerManager(userDefaults: defaults)
         #expect(reset.isRunning == false)
+    }
+
+    @Test
+    @MainActor
+    func timerManagerPauseResumeExcludesPausedTimeAndRestoresPausedState() {
+        let suiteName = "GrindNChill.TimerPauseResumeTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults suite.")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let startTime = date(year: 2026, month: 2, day: 10, hour: 10, minute: 0, calendar: calendar)
+        let pausedAt = startTime.addingTimeInterval(90)
+        let resumedAt = startTime.addingTimeInterval(600)
+        let stoppedAt = startTime.addingTimeInterval(660)
+        let categoryID = UUID()
+
+        let manager = TimerManager(userDefaults: defaults)
+        manager.start(categoryID: categoryID, at: startTime)
+
+        #expect(manager.pause(at: pausedAt) == true)
+        #expect(manager.isPaused == true)
+        #expect(manager.elapsedSeconds(at: resumedAt) == 90)
+
+        let restoredPaused = TimerManager(userDefaults: defaults)
+        #expect(restoredPaused.isRunning == true)
+        #expect(restoredPaused.isPaused == true)
+        #expect(restoredPaused.elapsedSeconds(at: resumedAt) == 90)
+
+        #expect(restoredPaused.resume(at: resumedAt) == true)
+        #expect(restoredPaused.isPaused == false)
+        #expect(restoredPaused.elapsedSeconds(at: stoppedAt) == 150)
+
+        let completed = restoredPaused.stop(at: stoppedAt)
+        #expect(completed?.elapsedSeconds == 150)
+        #expect(restoredPaused.isRunning == false)
+        #expect(restoredPaused.isPaused == false)
     }
 
     @Test

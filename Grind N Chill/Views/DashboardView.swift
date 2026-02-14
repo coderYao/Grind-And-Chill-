@@ -15,6 +15,7 @@ struct DashboardView: View {
             VStack(spacing: 16) {
                 balanceCard
                 dailyLedgerChangeCard
+                categoryMoneyBreakdownCard
                 dailyActivitiesCard
                 trendInsightsCard
                 streakHighlightCard
@@ -138,6 +139,49 @@ struct DashboardView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var categoryMoneyBreakdownCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Daily Category Money Breakdown")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let breakdown = viewModel.dailyCategoryMoneyBreakdown(entries: entries, on: context.date)
+
+                if breakdown.grind.isEmpty && breakdown.chill.isEmpty {
+                    Text("No category money movement yet today.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if breakdown.grind.isEmpty == false {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Grind by Category")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                ForEach(Array(breakdown.grind.prefix(5))) { item in
+                                    categoryMoneyRow(item, tone: .grind)
+                                }
+                            }
+                        }
+
+                        if breakdown.chill.isEmpty == false {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Chill by Category")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                ForEach(Array(breakdown.chill.prefix(5))) { item in
+                                    categoryMoneyRow(item, tone: .chill)
+                                }
+                            }
                         }
                     }
                 }
@@ -416,6 +460,11 @@ struct DashboardView: View {
         case negative
     }
 
+    private enum BreakdownTone {
+        case grind
+        case chill
+    }
+
     private func insightRow(
         title: String,
         insight: DashboardViewModel.WeeklyCategoryInsight?,
@@ -444,6 +493,27 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func categoryMoneyRow(
+        _ item: DashboardViewModel.CategoryMoneyBreakdown,
+        tone: BreakdownTone
+    ) -> some View {
+        HStack(spacing: 8) {
+            CategoryIconView(
+                iconName: item.symbolName,
+                color: item.iconColor.swiftUIColor
+            )
+            Text(item.title)
+                .font(.caption.weight(.semibold))
+            Spacer()
+            Text(item.totalAmountUSD.formatted(.currency(code: "USD")))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tone == .grind ? .green : .red)
+            Text("(\(item.entryCount))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }

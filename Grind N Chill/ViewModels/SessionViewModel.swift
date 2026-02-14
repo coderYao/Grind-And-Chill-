@@ -95,6 +95,26 @@ final class SessionViewModel {
         }
     }
 
+    func pauseSession(with timerManager: TimerManager) {
+        guard timerManager.pause() else {
+            latestError = "No running session to pause."
+            return
+        }
+
+        latestStatus = "Session paused."
+        latestError = nil
+    }
+
+    func resumeSession(with timerManager: TimerManager) {
+        guard timerManager.resume() else {
+            latestError = "No paused session to resume."
+            return
+        }
+
+        latestStatus = "Session resumed."
+        latestError = nil
+    }
+
     func addManualEntry(
         categories: [Category],
         existingEntries: [Entry],

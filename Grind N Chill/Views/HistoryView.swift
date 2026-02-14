@@ -24,6 +24,7 @@ struct HistoryView: View {
         let filtered = viewModel.filteredEntries(from: entries)
         let dailySummaries = viewModel.dailySummaries(from: filtered)
         let chartPoints = viewModel.chartPoints(from: dailySummaries)
+        let categoryBreakdown = viewModel.categoryMoneyBreakdown(from: filtered)
 
         List {
             if let status = viewModel.latestStatus {
@@ -75,6 +76,7 @@ struct HistoryView: View {
             } else {
                 Section("Charts") {
                     historyChart(points: chartPoints)
+                    categoryBreakdownCharts(categoryBreakdown)
                 }
 
                 ForEach(dailySummaries) { summary in
@@ -196,7 +198,7 @@ struct HistoryView: View {
                 },
                 onSave: { updatedDraft in
                     let rate = Decimal(string: String(usdPerHourRaw)) ?? Decimal(usdPerHourRaw)
-                    let saved = viewModel.saveManualEdit(
+                    let saved = viewModel.saveEntryEdit(
                         updatedDraft,
                         entries: entries,
                         modelContext: modelContext,
@@ -263,6 +265,94 @@ struct HistoryView: View {
         .padding(.vertical, 4)
     }
 
+    private func categoryBreakdownCharts(
+        _ breakdown: (grind: [HistoryViewModel.CategoryMoneySlice], chill: [HistoryViewModel.CategoryMoneySlice], grindTotal: Decimal, chillTotal: Decimal)
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Category Breakdown (Money)")
+                .font(.subheadline.weight(.semibold))
+
+            if breakdown.grind.isEmpty && breakdown.chill.isEmpty {
+                Text("No category money data for current filters.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                if breakdown.grind.isEmpty == false {
+                    pieChartCard(
+                        title: "Grind",
+                        slices: breakdown.grind,
+                        total: breakdown.grindTotal,
+                        amountColor: .green
+                    )
+                }
+
+                if breakdown.chill.isEmpty == false {
+                    pieChartCard(
+                        title: "Chill",
+                        slices: breakdown.chill,
+                        total: breakdown.chillTotal,
+                        amountColor: .red
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func pieChartCard(
+        title: String,
+        slices: [HistoryViewModel.CategoryMoneySlice],
+        total: Decimal,
+        amountColor: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(total.formatted(.currency(code: "USD")))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(amountColor)
+            }
+
+            Chart(slices) { slice in
+                SectorMark(
+                    angle: .value("Amount", NSDecimalNumber(decimal: slice.totalAmountUSD).doubleValue),
+                    innerRadius: .ratio(0.56),
+                    angularInset: 2
+                )
+                .foregroundStyle(slice.iconColor?.swiftUIColor ?? Color.secondary)
+            }
+            .frame(height: 180)
+
+            ForEach(Array(slices.prefix(5))) { slice in
+                categorySliceRow(slice, amountColor: amountColor)
+            }
+        }
+    }
+
+    private func categorySliceRow(
+        _ slice: HistoryViewModel.CategoryMoneySlice,
+        amountColor: Color
+    ) -> some View {
+        HStack(spacing: 8) {
+            CategoryIconView(
+                iconName: slice.symbolName,
+                color: slice.iconColor?.swiftUIColor ?? .secondary
+            )
+            Text(slice.title)
+                .font(.caption)
+            Spacer()
+            Text(slice.totalAmountUSD.formatted(.currency(code: "USD")))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(amountColor)
+            Text("(\(slice.entryCount))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func dailySummaryRow(_ summary: HistoryViewModel.DailySummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -315,15 +405,15 @@ struct HistoryView: View {
                     .foregroundStyle(entry.amountUSD < .zeroValue ? .red : .green)
             }
 
-            if entry.isManual, let draft = viewModel.manualDraft(for: entry) {
+            if let draft = viewModel.entryDraft(for: entry) {
                 HStack {
                     Spacer()
-                    Button("Edit Manual Entry") {
+                    Button("Edit Entry") {
                         editingDraft = draft
                     }
                     .font(.caption.weight(.semibold))
                     .buttonStyle(.bordered)
-                    .accessibilityIdentifier("history.editManual")
+                    .accessibilityIdentifier("history.editEntry")
                 }
             }
 
@@ -498,7 +588,7 @@ private struct HistoryManualEntryEditorSheet: View {
                         .accessibilityIdentifier("history.edit.note")
                 }
             }
-            .navigationTitle("Edit Manual Entry")
+            .navigationTitle("Edit Entry")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {

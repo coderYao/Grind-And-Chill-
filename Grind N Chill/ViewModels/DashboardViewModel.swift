@@ -22,6 +22,15 @@ final class DashboardViewModel {
         let latestTimestamp: Date
     }
 
+    struct CategoryMoneyBreakdown: Identifiable {
+        let id: UUID
+        let title: String
+        let symbolName: String
+        let iconColor: CategoryIconColor
+        let totalAmountUSD: Decimal
+        let entryCount: Int
+    }
+
     struct StreakHighlight {
         let categoryID: UUID
         let title: String
@@ -165,6 +174,94 @@ final class DashboardViewModel {
                 }
                 return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
             }
+    }
+
+    func dailyCategoryMoneyBreakdown(
+        entries: [Entry],
+        on day: Date = .now,
+        calendar: Calendar = .current
+    ) -> (grind: [CategoryMoneyBreakdown], chill: [CategoryMoneyBreakdown]) {
+        struct Bucket {
+            let id: UUID
+            let title: String
+            let symbolName: String
+            let iconColor: CategoryIconColor
+            var grindTotal: Decimal
+            var chillTotal: Decimal
+            var grindEntryCount: Int
+            var chillEntryCount: Int
+        }
+
+        let todayEntries = entriesForDay(entries, day: day, calendar: calendar)
+        var buckets: [UUID: Bucket] = [:]
+
+        for entry in todayEntries {
+            guard let category = entry.category else { continue }
+            let id = category.id
+
+            if buckets[id] == nil {
+                buckets[id] = Bucket(
+                    id: id,
+                    title: category.title,
+                    symbolName: category.resolvedSymbolName,
+                    iconColor: category.resolvedIconColor,
+                    grindTotal: .zeroValue,
+                    chillTotal: .zeroValue,
+                    grindEntryCount: 0,
+                    chillEntryCount: 0
+                )
+            }
+
+            guard var bucket = buckets[id] else { continue }
+            if entry.amountUSD >= .zeroValue {
+                bucket.grindTotal = (bucket.grindTotal + entry.amountUSD).rounded(scale: 2)
+                bucket.grindEntryCount += 1
+            } else {
+                bucket.chillTotal = (bucket.chillTotal + absolute(entry.amountUSD)).rounded(scale: 2)
+                bucket.chillEntryCount += 1
+            }
+            buckets[id] = bucket
+        }
+
+        let grind = buckets.values
+            .filter { $0.grindTotal > .zeroValue }
+            .map { bucket in
+                CategoryMoneyBreakdown(
+                    id: bucket.id,
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.grindTotal,
+                    entryCount: bucket.grindEntryCount
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.totalAmountUSD != rhs.totalAmountUSD {
+                    return lhs.totalAmountUSD > rhs.totalAmountUSD
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+        let chill = buckets.values
+            .filter { $0.chillTotal > .zeroValue }
+            .map { bucket in
+                CategoryMoneyBreakdown(
+                    id: bucket.id,
+                    title: bucket.title,
+                    symbolName: bucket.symbolName,
+                    iconColor: bucket.iconColor,
+                    totalAmountUSD: bucket.chillTotal,
+                    entryCount: bucket.chillEntryCount
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.totalAmountUSD != rhs.totalAmountUSD {
+                    return lhs.totalAmountUSD > rhs.totalAmountUSD
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+        return (grind, chill)
     }
 
     func streakHighlight(

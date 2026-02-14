@@ -17,6 +17,10 @@ struct SessionView: View {
         categories.first(where: { $0.id == viewModel.selectedCategoryID })
     }
 
+    private var activeSessionCategory: Category? {
+        categories.first(where: { $0.id == timerManager.activeCategoryID })
+    }
+
     var body: some View {
         Form {
             categoryPickerSection
@@ -75,41 +79,40 @@ struct SessionView: View {
             if timerManager.isRunning {
                 Text(viewModel.categoryTitle(for: categories, id: timerManager.activeCategoryID))
                     .font(.headline)
-
-                TimelineView(.periodic(from: .now, by: 1.0)) { context in
-                    let elapsedSeconds = timerManager.elapsedSeconds(at: context.date)
-                    let liveAmount = viewModel.liveAmountUSD(
-                        for: selectedCategory,
-                        elapsedSeconds: elapsedSeconds,
-                        usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
-                    ) ?? .zeroValue
-
-                    VStack(spacing: 6) {
-                        Text(formattedDuration(elapsedSeconds))
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-
-                        Text(liveAmount, format: .currency(code: "USD"))
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(liveAmount < .zeroValue ? .red : .green)
-                            .accessibilityIdentifier("session.liveAmount")
-                    }
-                }
+                timerDisplayView
 
                 @Bindable var bindableViewModel = viewModel
                 TextField("Session note", text: $bindableViewModel.sessionNote, axis: .vertical)
 
-                Button("Stop & Save") {
-                    viewModel.stopSession(
-                        with: timerManager,
-                        categories: categories,
-                        existingEntries: entries,
-                        modelContext: modelContext,
-                        usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
-                    )
+                HStack {
+                    if timerManager.isPaused {
+                        Button("Resume") {
+                            viewModel.resumeSession(with: timerManager)
+                        }
+                        .accessibilityIdentifier("session.resume")
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button("Pause") {
+                            viewModel.pauseSession(with: timerManager)
+                        }
+                        .accessibilityIdentifier("session.pause")
+                        .buttonStyle(.bordered)
+                    }
+
+                    Spacer()
+
+                    Button("Stop & Save") {
+                        viewModel.stopSession(
+                            with: timerManager,
+                            categories: categories,
+                            existingEntries: entries,
+                            modelContext: modelContext,
+                            usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
+                        )
+                    }
+                    .accessibilityIdentifier("session.stopSave")
+                    .buttonStyle(.borderedProminent)
                 }
-                .accessibilityIdentifier("session.stopSave")
-                .buttonStyle(.borderedProminent)
             } else {
                 if selectedCategory?.resolvedUnit != .time {
                     Text("Live timer is available for Time categories only.")
@@ -122,6 +125,51 @@ struct SessionView: View {
                 .accessibilityIdentifier("session.start")
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.selectedCategoryID == nil || selectedCategory?.resolvedUnit != .time)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timerDisplayView: some View {
+        if timerManager.isPaused {
+            let elapsedSeconds = timerManager.elapsedSeconds()
+            let liveAmount = viewModel.liveAmountUSD(
+                for: activeSessionCategory,
+                elapsedSeconds: elapsedSeconds,
+                usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
+            ) ?? .zeroValue
+
+            VStack(spacing: 6) {
+                Text("Paused")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(formattedDuration(elapsedSeconds))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                Text(liveAmount, format: .currency(code: "USD"))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(liveAmount < .zeroValue ? .red : .green)
+                    .accessibilityIdentifier("session.liveAmount")
+            }
+        } else {
+            TimelineView(.periodic(from: .now, by: 1.0)) { context in
+                let elapsedSeconds = timerManager.elapsedSeconds(at: context.date)
+                let liveAmount = viewModel.liveAmountUSD(
+                    for: activeSessionCategory,
+                    elapsedSeconds: elapsedSeconds,
+                    usdPerHour: settingsViewModel.asDecimal(usdPerHourRaw)
+                ) ?? .zeroValue
+
+                VStack(spacing: 6) {
+                    Text(formattedDuration(elapsedSeconds))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+
+                    Text(liveAmount, format: .currency(code: "USD"))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(liveAmount < .zeroValue ? .red : .green)
+                        .accessibilityIdentifier("session.liveAmount")
+                }
             }
         }
     }
