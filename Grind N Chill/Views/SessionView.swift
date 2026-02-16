@@ -29,6 +29,7 @@ struct SessionView: View {
             feedbackSection
         }
         .navigationTitle("Session")
+        .keyboardDoneToolbar()
         .onAppear {
             viewModel.ensureCategorySelection(
                 from: categories,
@@ -181,10 +182,36 @@ struct SessionView: View {
             if let selectedCategory {
                 switch selectedCategory.resolvedUnit {
                 case .time:
+                    HStack {
+                        Text("Duration (minutes)")
+                        Spacer()
+                        TextField(
+                            "Minutes",
+                            value: $bindableViewModel.manualMinutes,
+                            format: .number
+                        )
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                        .accessibilityIdentifier("session.manualMinutes")
+                    }
                     Stepper(value: $bindableViewModel.manualMinutes, in: 1 ... 600) {
                         Text("Duration: \(viewModel.manualMinutes) minutes")
                     }
                 case .count:
+                    HStack {
+                        Text("Count")
+                        Spacer()
+                        TextField(
+                            "Count",
+                            value: $bindableViewModel.manualCount,
+                            format: .number
+                        )
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                        .accessibilityIdentifier("session.manualCount")
+                    }
                     Stepper(value: $bindableViewModel.manualCount, in: 1 ... 500) {
                         Text("Count: \(viewModel.manualCount)")
                     }

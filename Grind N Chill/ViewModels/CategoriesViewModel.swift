@@ -155,6 +155,12 @@ final class CategoriesViewModel {
             return false
         }
 
+        let goalRange = dailyGoalRange()
+        guard goalRange.contains(dailyGoalMinutes) else {
+            latestError = "Goal must be between \(goalRange.lowerBound) and \(goalRange.upperBound)."
+            return false
+        }
+
         if streakEnabled == false {
             badgeEnabled = false
             streakBonusEnabled = false

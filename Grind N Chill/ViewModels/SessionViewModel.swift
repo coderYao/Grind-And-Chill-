@@ -133,15 +133,15 @@ final class SessionViewModel {
 
         switch category.resolvedUnit {
         case .time:
-            guard manualMinutes > 0 else {
-                latestError = "Manual minutes must be greater than zero."
+            guard manualMinutes > 0, manualMinutes <= 600 else {
+                latestError = "Manual minutes must be between 1 and 600."
                 return
             }
             durationMinutes = manualMinutes
             quantity = Decimal(manualMinutes)
         case .count:
-            guard manualCount > 0 else {
-                latestError = "Count must be greater than zero."
+            guard manualCount > 0, manualCount <= 500 else {
+                latestError = "Count must be between 1 and 500."
                 return
             }
             durationMinutes = 0

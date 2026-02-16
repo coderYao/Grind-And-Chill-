@@ -545,9 +545,31 @@ private struct HistoryManualEntryEditorSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("Date & Time") {
+                    DatePicker(
+                        "Entry Time",
+                        selection: $draft.timestamp,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .accessibilityIdentifier("history.edit.timestamp")
+                }
+
                 Section("Amount") {
                     switch draft.unit {
                     case .time:
+                        HStack {
+                            Text("Duration (minutes)")
+                            Spacer()
+                            TextField(
+                                "Minutes",
+                                value: $draft.durationMinutes,
+                                format: .number
+                            )
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 120)
+                            .accessibilityIdentifier("history.edit.durationInput")
+                        }
                         Stepper(value: $draft.durationMinutes, in: 1 ... 1_440) {
                             Text("Duration: \(draft.durationMinutes) minutes")
                         }
@@ -589,6 +611,7 @@ private struct HistoryManualEntryEditorSheet: View {
                 }
             }
             .navigationTitle("Edit Entry")
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {

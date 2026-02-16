@@ -1388,7 +1388,9 @@ struct Grind_N_ChillTests {
             return
         }
 
+        let updatedTimestamp = Date(timeIntervalSinceReferenceDate: 100_800)
         draft.durationMinutes = 45
+        draft.timestamp = updatedTimestamp
         draft.note = "updated timer note"
 
         let saved = viewModel.saveEntryEdit(
@@ -1403,6 +1405,7 @@ struct Grind_N_ChillTests {
         #expect(persistedEntries.count == 1)
         #expect(persistedEntries[0].amountUSD == (Decimal(string: "13.5") ?? .zeroValue))
         #expect(persistedEntries[0].quantity == Decimal(45))
+        #expect(persistedEntries[0].timestamp == updatedTimestamp)
         #expect(persistedEntries[0].note == "updated timer note")
         #expect(persistedEntries[0].isManual == false)
         #expect(viewModel.latestStatus == "Entry updated.")
@@ -1444,6 +1447,7 @@ struct Grind_N_ChillTests {
             categoryTitle: category.title,
             unit: .money,
             categoryType: category.resolvedType,
+            timestamp: entry.timestamp,
             amountInput: 3.0,
             countInput: 3.0,
             durationMinutes: 0,

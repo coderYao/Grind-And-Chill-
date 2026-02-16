@@ -265,6 +265,21 @@ private struct CategoryEditorSheet: View {
                 }
 
                 Section("Goal") {
+                    HStack {
+                        Text("Threshold")
+                        Spacer()
+                        TextField(
+                            "Goal",
+                            value: $viewModel.dailyGoalMinutes,
+                            format: .number
+                        )
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                        .accessibilityIdentifier("categoryEditor.goalValue")
+                    }
+                    .disabled(viewModel.streakEnabled == false)
+
                     Stepper(value: $viewModel.dailyGoalMinutes, in: viewModel.dailyGoalRange()) {
                         Text(viewModel.dailyGoalLabel())
                     }
@@ -346,6 +361,7 @@ private struct CategoryEditorSheet: View {
                 }
             }
             .navigationTitle(sheetTitle)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {

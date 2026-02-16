@@ -91,6 +91,7 @@ final class HistoryViewModel {
         let categoryTitle: String
         let unit: CategoryUnit
         let categoryType: CategoryType
+        var timestamp: Date
         var amountInput: Double
         var countInput: Double
         var durationMinutes: Int
@@ -447,6 +448,7 @@ final class HistoryViewModel {
                 categoryTitle: categoryTitle,
                 unit: .time,
                 categoryType: categoryType,
+                timestamp: entry.timestamp,
                 amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
                 countInput: NSDecimalNumber(decimal: quantity).doubleValue,
                 durationMinutes: max(1, entry.durationMinutes),
@@ -458,6 +460,7 @@ final class HistoryViewModel {
                 categoryTitle: categoryTitle,
                 unit: .count,
                 categoryType: categoryType,
+                timestamp: entry.timestamp,
                 amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
                 countInput: NSDecimalNumber(decimal: quantity).doubleValue,
                 durationMinutes: entry.durationMinutes,
@@ -469,6 +472,7 @@ final class HistoryViewModel {
                 categoryTitle: categoryTitle,
                 unit: .money,
                 categoryType: categoryType,
+                timestamp: entry.timestamp,
                 amountInput: NSDecimalNumber(decimal: absAmount).doubleValue,
                 countInput: NSDecimalNumber(decimal: quantity).doubleValue,
                 durationMinutes: entry.durationMinutes,
@@ -511,9 +515,9 @@ final class HistoryViewModel {
 
         switch draft.unit {
         case .time:
-            guard draft.durationMinutes > 0 else {
+            guard draft.durationMinutes > 0, draft.durationMinutes <= 1_440 else {
                 latestStatus = nil
-                latestError = "Duration must be greater than zero."
+                latestError = "Duration must be between 1 and 1440 minutes."
                 return false
             }
             durationMinutes = draft.durationMinutes
@@ -545,6 +549,7 @@ final class HistoryViewModel {
         entry.durationMinutes = durationMinutes
         entry.quantity = quantity
         entry.unit = draft.unit
+        entry.timestamp = draft.timestamp
         entry.amountUSD = amount
         entry.note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
 
