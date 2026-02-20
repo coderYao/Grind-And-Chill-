@@ -1,6 +1,7 @@
+import { resolveCadence, resolveMilestones } from "./streaks.js";
 import { deepClone } from "./utils.js";
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export const DEFAULT_STATE = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -9,11 +10,25 @@ export const DEFAULT_STATE = {
   },
   categories: [],
   entries: [],
+  badgeAwards: [],
   activeSession: null,
 };
 
 export function createDefaultState() {
   return deepClone(DEFAULT_STATE);
+}
+
+function asBool(value, fallback = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (value === "true" || value === "1") {
+    return true;
+  }
+  if (value === "false" || value === "0") {
+    return false;
+  }
+  return fallback;
 }
 
 function normalizeCategory(rawCategory) {
@@ -48,6 +63,10 @@ function normalizeCategory(rawCategory) {
         ? null
         : Number(rawCategory.usdPerCount),
     dailyGoalValue: Number.isFinite(Number(rawCategory.dailyGoalValue)) ? Number(rawCategory.dailyGoalValue) : 0,
+    streakEnabled: asBool(rawCategory.streakEnabled, true),
+    streakCadence: resolveCadence(rawCategory.streakCadence),
+    badgeEnabled: asBool(rawCategory.badgeEnabled, true),
+    badgeMilestones: resolveMilestones(rawCategory.badgeMilestones),
     createdAt: rawCategory.createdAt || new Date().toISOString(),
     updatedAt: rawCategory.updatedAt || new Date().toISOString(),
   };
@@ -76,9 +95,33 @@ function normalizeEntry(rawEntry) {
     unit: ["time", "count", "money"].includes(rawEntry.unit) ? rawEntry.unit : "time",
     amountUSD: Number.isFinite(Number(rawEntry.amountUSD)) ? Number(rawEntry.amountUSD) : 0,
     note: String(rawEntry.note || ""),
+    bonusKey: rawEntry.bonusKey ? String(rawEntry.bonusKey) : null,
     isManual: Boolean(rawEntry.isManual),
     createdAt: rawEntry.createdAt || new Date().toISOString(),
     updatedAt: rawEntry.updatedAt || new Date().toISOString(),
+  };
+}
+
+function normalizeBadgeAward(rawAward) {
+  if (!rawAward || typeof rawAward !== "object") {
+    return null;
+  }
+
+  const awardKey = String(rawAward.awardKey || "").trim();
+  if (!awardKey) {
+    return null;
+  }
+
+  const cadence = resolveCadence(rawAward.cadence);
+  const milestone = Number.parseInt(String(rawAward.milestone || ""), 10);
+
+  return {
+    id: String(rawAward.id || `${awardKey}:${rawAward.dateAwarded || ""}`),
+    awardKey,
+    dateAwarded: rawAward.dateAwarded || new Date().toISOString(),
+    categoryId: rawAward.categoryId ? String(rawAward.categoryId) : null,
+    milestone: Number.isFinite(milestone) && milestone > 0 ? milestone : null,
+    cadence,
   };
 }
 
@@ -125,6 +168,14 @@ export function normalizeState(rawState) {
 
   const normalizedSession = normalizeSession(rawState.activeSession);
 
+  const normalizedAwards = Array.isArray(rawState.badgeAwards)
+    ? rawState.badgeAwards
+        .map(normalizeBadgeAward)
+        .filter((award) => award && (!award.categoryId || categoryIdSet.has(award.categoryId)))
+    : [];
+
+  normalizedAwards.sort((a, b) => new Date(b.dateAwarded).getTime() - new Date(a.dateAwarded).getTime());
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     settings: {
@@ -134,6 +185,7 @@ export function normalizeState(rawState) {
     },
     categories: normalizedCategories,
     entries: normalizedEntries,
+    badgeAwards: normalizedAwards,
     activeSession:
       normalizedSession && categoryIdSet.has(normalizedSession.categoryId) ? normalizedSession : null,
   };

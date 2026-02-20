@@ -1,6 +1,16 @@
 import { amountUSDForCategory, dailyLedgerSummary, totalBalance } from "./ledger.js";
 import { createDefaultState, normalizeState } from "./schema.js";
 import {
+  badgeLabelFromAward,
+  cadencePeriodKey,
+  cadenceShortSuffix,
+  resolveCadence,
+  resolveMilestones,
+  streakHighlight,
+  streakRiskAlerts,
+  streakForCategory,
+} from "./streaks.js";
+import {
   dateKey,
   deepClone,
   round2,
@@ -37,12 +47,57 @@ function normalizeMode(rawMode) {
   return rawMode === "hourlyRate" ? "hourlyRate" : "multiplier";
 }
 
+function asBool(value, fallback = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (value === "true" || value === "1" || value === "on") {
+    return true;
+  }
+  if (value === "false" || value === "0") {
+    return false;
+  }
+  return fallback;
+}
+
 function compareEntriesDesc(a, b) {
   const dateDiff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   if (dateDiff !== 0) {
     return dateDiff;
   }
   return String(b.id).localeCompare(String(a.id));
+}
+
+function compareAwardsDesc(a, b) {
+  const timeDiff = new Date(b.dateAwarded).getTime() - new Date(a.dateAwarded).getTime();
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+  return String(b.awardKey).localeCompare(String(a.awardKey));
+}
+
+function normalizeCategoryPatchInput(input, fallback) {
+  const streakEnabled = asBool(input?.streakEnabled, fallback?.streakEnabled ?? true);
+  const badgeEnabledRaw = asBool(input?.badgeEnabled, fallback?.badgeEnabled ?? true);
+  const badgeEnabled = streakEnabled ? badgeEnabledRaw : false;
+
+  return {
+    title: String(input?.title ?? fallback?.title ?? "").trim(),
+    type: normalizeType(input?.type ?? fallback?.type),
+    unit: normalizeUnit(input?.unit ?? fallback?.unit),
+    timeConversionMode: normalizeMode(input?.timeConversionMode ?? fallback?.timeConversionMode),
+    multiplier: Math.max(0.01, toNumber(input?.multiplier ?? fallback?.multiplier, 1)),
+    hourlyRateUSD: Math.max(
+      0.01,
+      toNumber(input?.hourlyRateUSD ?? fallback?.hourlyRateUSD, fallback?.hourlyRateUSD ?? 18)
+    ),
+    usdPerCount: Math.max(0.01, toNumber(input?.usdPerCount ?? fallback?.usdPerCount, 1)),
+    dailyGoalValue: Math.max(0, toInt(input?.dailyGoalValue ?? fallback?.dailyGoalValue, 0)),
+    streakEnabled,
+    streakCadence: resolveCadence(input?.streakCadence ?? fallback?.streakCadence),
+    badgeEnabled,
+    badgeMilestones: resolveMilestones(input?.badgeMilestonesInput ?? input?.badgeMilestones ?? fallback?.badgeMilestones),
+  };
 }
 
 export class AppStore {
@@ -79,29 +134,44 @@ export class AppStore {
   }
 
   async createCategory(input) {
-    const title = String(input?.title || "").trim();
-    if (!title) {
+    const normalized = normalizeCategoryPatchInput(input, {
+      title: "",
+      type: "goodHabit",
+      unit: "time",
+      timeConversionMode: "multiplier",
+      multiplier: 1,
+      hourlyRateUSD: this.state.settings.usdPerHour,
+      usdPerCount: 1,
+      dailyGoalValue: 0,
+      streakEnabled: true,
+      streakCadence: "daily",
+      badgeEnabled: true,
+      badgeMilestones: [3, 7, 30],
+    });
+
+    if (!normalized.title) {
       return { ok: false, error: "Category title is required." };
     }
 
     const nowISO = toISOString();
-    const type = normalizeType(input?.type);
-    const unit = normalizeUnit(input?.unit);
-    const mode = normalizeMode(input?.timeConversionMode);
 
     const category = {
       id: uuid(),
-      title,
-      type,
-      unit,
-      multiplier: unit === "time" ? Math.max(0.01, toNumber(input?.multiplier, 1)) : 1,
-      timeConversionMode: unit === "time" ? mode : "multiplier",
+      title: normalized.title,
+      type: normalized.type,
+      unit: normalized.unit,
+      multiplier: normalized.unit === "time" ? normalized.multiplier : 1,
+      timeConversionMode: normalized.unit === "time" ? normalized.timeConversionMode : "multiplier",
       hourlyRateUSD:
-        unit === "time" && mode === "hourlyRate"
-          ? Math.max(0.01, toNumber(input?.hourlyRateUSD, this.state.settings.usdPerHour))
+        normalized.unit === "time" && normalized.timeConversionMode === "hourlyRate"
+          ? normalized.hourlyRateUSD
           : null,
-      usdPerCount: unit === "count" ? Math.max(0.01, toNumber(input?.usdPerCount, 1)) : null,
-      dailyGoalValue: Math.max(0, toInt(input?.dailyGoalValue, 0)),
+      usdPerCount: normalized.unit === "count" ? normalized.usdPerCount : null,
+      dailyGoalValue: normalized.dailyGoalValue,
+      streakEnabled: normalized.streakEnabled,
+      streakCadence: normalized.streakCadence,
+      badgeEnabled: normalized.badgeEnabled,
+      badgeMilestones: normalized.badgeMilestones,
       createdAt: nowISO,
       updatedAt: nowISO,
     };
@@ -119,36 +189,29 @@ export class AppStore {
       return { ok: false, error: "Category not found." };
     }
 
-    const title = String(patch?.title ?? category.title).trim();
-    if (!title) {
+    const normalized = normalizeCategoryPatchInput(patch, category);
+
+    if (!normalized.title) {
       return { ok: false, error: "Category title is required." };
     }
 
-    const type = normalizeType(patch?.type ?? category.type);
-    const unit = normalizeUnit(patch?.unit ?? category.unit);
-    const mode = normalizeMode(patch?.timeConversionMode ?? category.timeConversionMode);
-
-    category.title = title;
-    category.type = type;
-    category.unit = unit;
-    category.multiplier = unit === "time" ? Math.max(0.01, toNumber(patch?.multiplier ?? category.multiplier, 1)) : 1;
-    category.timeConversionMode = unit === "time" ? mode : "multiplier";
+    category.title = normalized.title;
+    category.type = normalized.type;
+    category.unit = normalized.unit;
+    category.multiplier = normalized.unit === "time" ? normalized.multiplier : 1;
+    category.timeConversionMode = normalized.unit === "time" ? normalized.timeConversionMode : "multiplier";
     category.hourlyRateUSD =
-      unit === "time" && mode === "hourlyRate"
-        ? Math.max(
-            0.01,
-            toNumber(
-              patch?.hourlyRateUSD ?? category.hourlyRateUSD ?? this.state.settings.usdPerHour,
-              this.state.settings.usdPerHour
-            )
-          )
+      normalized.unit === "time" && normalized.timeConversionMode === "hourlyRate"
+        ? normalized.hourlyRateUSD
         : null;
-    category.usdPerCount =
-      unit === "count" ? Math.max(0.01, toNumber(patch?.usdPerCount ?? category.usdPerCount ?? 1, 1)) : null;
-    category.dailyGoalValue = Math.max(0, toInt(patch?.dailyGoalValue ?? category.dailyGoalValue, 0));
+    category.usdPerCount = normalized.unit === "count" ? normalized.usdPerCount : null;
+    category.dailyGoalValue = normalized.dailyGoalValue;
+    category.streakEnabled = normalized.streakEnabled;
+    category.streakCadence = normalized.streakCadence;
+    category.badgeEnabled = normalized.badgeEnabled;
+    category.badgeMilestones = normalized.badgeMilestones;
     category.updatedAt = toISOString();
 
-    // Keep historical entries intact, but update unit pointer for future entries.
     this.state.categories.sort((a, b) => a.title.localeCompare(b.title));
 
     await this._persistAndEmit();
@@ -163,6 +226,7 @@ export class AppStore {
     }
 
     this.state.entries = this.state.entries.filter((entry) => entry.categoryId !== categoryId);
+    this.state.badgeAwards = this.state.badgeAwards.filter((award) => award.categoryId !== categoryId);
 
     if (this.state.activeSession?.categoryId === categoryId) {
       this.state.activeSession = null;
@@ -210,6 +274,7 @@ export class AppStore {
       unit,
       amountUSD,
       note: String(input?.note || "").trim(),
+      bonusKey: null,
       isManual: true,
       createdAt: toISOString(),
       updatedAt: toISOString(),
@@ -218,8 +283,10 @@ export class AppStore {
     this.state.entries.push(entry);
     this.state.entries.sort(compareEntriesDesc);
 
+    const newAwards = this._awardBadgesIfNeededForCategory(category, timestamp);
+
     await this._persistAndEmit();
-    return { ok: true, entry: deepClone(entry) };
+    return { ok: true, entry: deepClone(entry), newAwards };
   }
 
   async deleteEntry(entryId) {
@@ -343,6 +410,7 @@ export class AppStore {
         usdPerHour: this.state.settings.usdPerHour,
       }),
       note: String(input.note || "").trim(),
+      bonusKey: null,
       isManual: false,
       createdAt: toISOString(),
       updatedAt: toISOString(),
@@ -352,8 +420,10 @@ export class AppStore {
     this.state.entries.sort(compareEntriesDesc);
     this.state.activeSession = null;
 
+    const newAwards = this._awardBadgesIfNeededForCategory(category, now);
+
     await this._persistAndEmit();
-    return { ok: true, entry: deepClone(entry) };
+    return { ok: true, entry: deepClone(entry), newAwards };
   }
 
   async clearActiveSession() {
@@ -381,12 +451,31 @@ export class AppStore {
         }
       : null;
 
+    const highlight = streakHighlight(categories, entries, now);
+    const alerts = streakRiskAlerts(categories, entries, now);
+
+    const latestBadges = [...this.state.badgeAwards]
+      .sort(compareAwardsDesc)
+      .slice(0, 5)
+      .map((award) => ({
+        ...award,
+        label: badgeLabelFromAward(award),
+      }));
+
     return {
       balanceUSD: totalBalance(entries),
       today,
       activeSession,
       totalEntries: entries.length,
       totalCategories: categories.length,
+      streakHighlight: highlight
+        ? {
+            ...highlight,
+            shortSuffix: cadenceShortSuffix(highlight.cadence),
+          }
+        : null,
+      streakRiskAlerts: alerts,
+      latestBadges,
     };
   }
 
@@ -499,10 +588,7 @@ export class AppStore {
 
       const timestamp = item?.timestamp ? toISOString(item.timestamp) : toISOString();
       const quantity = Math.max(0, toNumber(item?.quantity, 0));
-      const durationMinutes = Math.max(
-        0,
-        toInt(item?.durationMinutes, unit === "time" ? Math.round(quantity) : 0)
-      );
+      const durationMinutes = Math.max(0, toInt(item?.durationMinutes, unit === "time" ? Math.round(quantity) : 0));
       const amountUSD = round2(toNumber(item?.amountUSD, 0));
 
       const catKey = categoryKey(categoryTitle, categoryType, unit);
@@ -519,6 +605,10 @@ export class AppStore {
           hourlyRateUSD: null,
           usdPerCount: unit === "count" ? 1 : null,
           dailyGoalValue: 0,
+          streakEnabled: true,
+          streakCadence: "daily",
+          badgeEnabled: true,
+          badgeMilestones: [3, 7, 30],
           createdAt: nowISO,
           updatedAt: nowISO,
         };
@@ -541,6 +631,7 @@ export class AppStore {
         existingEntry.unit = unit;
         existingEntry.amountUSD = amountUSD;
         existingEntry.note = String(item?.note || "").trim();
+        existingEntry.bonusKey = null;
         existingEntry.isManual = Boolean(item?.isManual);
         existingEntry.updatedAt = toISOString();
         updatedEntries += 1;
@@ -555,6 +646,7 @@ export class AppStore {
           unit,
           amountUSD,
           note: String(item?.note || "").trim(),
+          bonusKey: null,
           isManual: Boolean(item?.isManual),
           createdAt: nowISO,
           updatedAt: nowISO,
@@ -580,6 +672,56 @@ export class AppStore {
         createdCategories,
       },
     };
+  }
+
+  _awardBadgesIfNeededForCategory(category, now = Date.now()) {
+    if (!category || category.streakEnabled === false || category.badgeEnabled === false) {
+      return [];
+    }
+
+    const milestones = resolveMilestones(category.badgeMilestones);
+    if (milestones.length === 0) {
+      return [];
+    }
+
+    const streakValue = streakForCategory(category, this.state.entries, now);
+    if (streakValue <= 0) {
+      return [];
+    }
+
+    const cadence = resolveCadence(category.streakCadence);
+    const periodKey = cadencePeriodKey(cadence, now);
+
+    const newAwards = [];
+
+    for (const milestone of milestones) {
+      if (streakValue < milestone) {
+        continue;
+      }
+
+      const awardKey = `streak:${category.id}:${milestone}:${periodKey}`;
+      if (this.state.badgeAwards.some((award) => award.awardKey === awardKey)) {
+        continue;
+      }
+
+      const award = {
+        id: uuid(),
+        awardKey,
+        dateAwarded: toISOString(now),
+        categoryId: category.id,
+        milestone,
+        cadence,
+      };
+
+      this.state.badgeAwards.push(award);
+      newAwards.push(award);
+    }
+
+    if (newAwards.length > 0) {
+      this.state.badgeAwards.sort(compareAwardsDesc);
+    }
+
+    return newAwards;
   }
 
   _emit() {

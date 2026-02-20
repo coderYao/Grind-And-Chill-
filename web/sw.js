@@ -7,6 +7,7 @@ const ASSETS = [
   "./src/core/ledger.js",
   "./src/core/schema.js",
   "./src/core/store.js",
+  "./src/core/streaks.js",
   "./src/core/utils.js",
   "./src/storage/localStorageAdapter.js",
 ];

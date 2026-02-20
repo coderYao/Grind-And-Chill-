@@ -53,4 +53,11 @@ Useful checks
 -------------
 node --check src/app.js
 node --check src/core/store.js
+node --check src/core/streaks.js
 git status --short
+
+
+GitHub branch protection guide
+------------------------------
+See:
+/Users/shyyao/Dev/IOS Projects/Grind N Chill/BRANCH_PROTECTION.md

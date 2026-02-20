@@ -3,7 +3,6 @@ import { AppStore } from "./core/store.js";
 import {
   escapeHtml,
   formatCurrency,
-  formatDate,
   formatDateTime,
   formatDuration,
   toNumber,
@@ -154,6 +153,9 @@ function renderFlash() {
 function renderDashboard(dashboard) {
   const balanceTone = dashboard.balanceUSD < 0 ? "negative" : "positive";
   const todayTone = dashboard.today.ledgerChange < 0 ? "negative" : "positive";
+  const highlight = dashboard.streakHighlight;
+  const alerts = dashboard.streakRiskAlerts || [];
+  const badges = dashboard.latestBadges || [];
 
   return `
     <section class="panel-grid">
@@ -192,6 +194,63 @@ function renderDashboard(dashboard) {
             )}</strong></p>
           `
           : `<p class="muted">No active timer session.</p>`}
+      </article>
+
+      <article class="panel panel-wide">
+        <h2>Streak Highlight</h2>
+        ${highlight
+          ? `
+            <p><strong>${escapeHtml(highlight.title)}</strong> · ${highlight.type === "goodHabit" ? "Grind" : "Chill"}</p>
+            <p class="muted">${escapeHtml(highlight.progressText)}</p>
+            <p class="metric">${highlight.streak}${highlight.shortSuffix}</p>
+          `
+          : `<p class="muted">No active streak yet. Keep your categories moving consistently.</p>`}
+      </article>
+
+      <article class="panel panel-wide">
+        <h2>Streak Risk Alerts</h2>
+        ${alerts.length === 0
+          ? `<p class="muted">No streaks at risk right now.</p>`
+          : `
+            <ul class="list">
+              ${alerts
+                .slice(0, 3)
+                .map(
+                  (alert) => `
+                    <li>
+                      <div>
+                        <p><strong>${escapeHtml(alert.title)}</strong> · ${alert.type === "goodHabit" ? "Grind" : "Chill"}</p>
+                        <p class="muted">${escapeHtml(alert.message)}</p>
+                      </div>
+                      <span class="pill ${alert.severity >= 3 ? "pill-danger" : "pill-watch"}">${alert.severity >= 3 ? "High" : "Watch"}</span>
+                    </li>
+                  `
+                )
+                .join("")}
+            </ul>
+          `}
+      </article>
+
+      <article class="panel panel-wide">
+        <h2>Latest Badges</h2>
+        ${badges.length === 0
+          ? `<p class="muted">No badges yet. Hit streak milestones (3, 7, 30) to unlock them.</p>`
+          : `
+            <ul class="list">
+              ${badges
+                .map(
+                  (badge) => `
+                    <li>
+                      <div>
+                        <p><strong>${escapeHtml(badge.label)}</strong></p>
+                        <p class="muted">${formatDateTime(badge.dateAwarded)}</p>
+                      </div>
+                    </li>
+                  `
+                )
+                .join("")}
+            </ul>
+          `}
       </article>
     </section>
   `;
@@ -338,7 +397,15 @@ function renderCategories(state, editingCategory) {
     hourlyRateUSD: state.settings.usdPerHour,
     usdPerCount: 1,
     dailyGoalValue: 0,
+    streakEnabled: true,
+    streakCadence: "daily",
+    badgeEnabled: true,
+    badgeMilestones: [3, 7, 30],
   };
+
+  const badgeMilestonesInput = Array.isArray(formData.badgeMilestones)
+    ? formData.badgeMilestones.join(", ")
+    : "3, 7, 30";
 
   return `
     <section class="stack">
@@ -404,6 +471,38 @@ function renderCategories(state, editingCategory) {
             </label>
           </div>
 
+          <div class="row-3">
+            <label class="checkbox">
+              <input type="checkbox" name="streakEnabled" ${formData.streakEnabled ? "checked" : ""} />
+              Track Streak
+            </label>
+
+            <label class="field">
+              <span>Streak Cadence</span>
+              <select name="streakCadence">
+                <option value="daily" ${formData.streakCadence === "daily" ? "selected" : ""}>Daily</option>
+                <option value="weekly" ${formData.streakCadence === "weekly" ? "selected" : ""}>Weekly</option>
+                <option value="monthly" ${formData.streakCadence === "monthly" ? "selected" : ""}>Monthly</option>
+              </select>
+            </label>
+
+            <label class="checkbox">
+              <input type="checkbox" name="badgeEnabled" ${formData.badgeEnabled ? "checked" : ""} />
+              Badge Awards
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Badge Milestones</span>
+            <input
+              type="text"
+              name="badgeMilestonesInput"
+              value="${escapeHtml(badgeMilestonesInput)}"
+              placeholder="3, 7, 30"
+            />
+          </label>
+          <p class="muted">Comma-separated milestones (for example: 3, 7, 30).</p>
+
           <div class="actions">
             <button type="submit" class="button strong">${isEditing ? "Save Category" : "Add Category"}</button>
             ${isEditing ? `<button type="button" class="button" data-action="category-cancel-edit">Cancel</button>` : ""}
@@ -424,7 +523,10 @@ function renderCategories(state, editingCategory) {
                     <li>
                       <div>
                         <p><strong>${escapeHtml(category.title)}</strong></p>
-                        <p class="muted">${category.type} · ${category.unit}</p>
+                        <p class="muted">${category.type} · ${category.unit} · ${category.streakCadence || "daily"} cadence · goal ${toNumber(
+                          category.dailyGoalValue,
+                          0
+                        )}</p>
                       </div>
                       <div class="actions">
                         <button type="button" class="button" data-action="category-edit" data-id="${category.id}">Edit</button>
@@ -648,7 +750,9 @@ async function handleRootClick(event) {
       return;
     }
     uiState.sessionNote = "";
-    setFlash("success", `Session saved (${formatCurrency(result.entry.amountUSD)}).`);
+    const badgeSuffix =
+      result.newAwards && result.newAwards.length > 0 ? ` + ${result.newAwards.length} new badge(s)` : "";
+    setFlash("success", `Session saved (${formatCurrency(result.entry.amountUSD)})${badgeSuffix}.`);
     return;
   }
 
@@ -752,6 +856,10 @@ async function handleRootSubmit(event) {
       hourlyRateUSD: data.get("hourlyRateUSD"),
       usdPerCount: data.get("usdPerCount"),
       dailyGoalValue: data.get("dailyGoalValue"),
+      streakEnabled: data.get("streakEnabled") === "on",
+      streakCadence: data.get("streakCadence"),
+      badgeEnabled: data.get("badgeEnabled") === "on",
+      badgeMilestonesInput: data.get("badgeMilestonesInput"),
     };
 
     const categoryID = data.get("categoryId");
@@ -781,7 +889,9 @@ async function handleRootSubmit(event) {
       return;
     }
 
-    setFlash("success", `Entry saved (${formatCurrency(result.entry.amountUSD)}).`);
+    const badgeSuffix =
+      result.newAwards && result.newAwards.length > 0 ? ` + ${result.newAwards.length} new badge(s)` : "";
+    setFlash("success", `Entry saved (${formatCurrency(result.entry.amountUSD)})${badgeSuffix}.`);
     return;
   }
 
