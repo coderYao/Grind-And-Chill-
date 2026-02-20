@@ -1,0 +1,4 @@
+.npm-cache/
+.cf-dist/
+.wrangler/
+.vscode/

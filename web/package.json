@@ -1,0 +1,12 @@
+{
+  "name": "grind-n-chill-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 4173",
+    "cf:whoami": "NPM_CONFIG_CACHE=./.npm-cache npx --yes wrangler whoami",
+    "cf:prepare": "rm -rf .cf-dist && mkdir -p .cf-dist && cp index.html styles.css sw.js .cf-dist/ && cp -R src .cf-dist/",
+    "cf:deploy": "npm run cf:prepare && NPM_CONFIG_CACHE=./.npm-cache npx --yes wrangler pages deploy .cf-dist --project-name grind-n-chill-web --branch main --commit-dirty=true"
+  }
+}

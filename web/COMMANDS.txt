@@ -1,0 +1,56 @@
+Grind N Chill Web - Important Commands
+======================================
+
+Project directory
+-----------------
+cd "/Users/shyyao/Dev/IOS Projects/Grind N Chill/web"
+
+
+Run locally
+-----------
+python3 -m http.server 4173
+# Open: http://localhost:4173
+
+
+Cloudflare authentication
+-------------------------
+npm run cf:whoami
+# If not logged in:
+NPM_CONFIG_CACHE=./.npm-cache npx --yes wrangler login
+
+
+Deploy to production (recommended)
+----------------------------------
+npm run cf:deploy
+# This prepares .cf-dist and deploys to Cloudflare Pages main branch
+
+
+GitHub Actions setup (one-time)
+-------------------------------
+# In GitHub repo settings -> Secrets and variables -> Actions, add:
+#   CLOUDFLARE_API_TOKEN
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# Workflow file:
+#   .github/workflows/deploy-web-pages.yml
+#
+# Trigger deployment manually from GitHub:
+# Actions -> "Deploy Web To Cloudflare Pages" -> Run workflow
+
+
+Manual deploy commands (fallback)
+---------------------------------
+npm run cf:prepare
+NPM_CONFIG_CACHE=./.npm-cache npx --yes wrangler pages deploy .cf-dist --project-name grind-n-chill-web --branch main --commit-dirty=true
+
+
+Verify production is up
+-----------------------
+curl -I https://grind-n-chill-web.pages.dev
+
+
+Useful checks
+-------------
+node --check src/app.js
+node --check src/core/store.js
+git status --short
