@@ -2,6 +2,8 @@
 
 This is a browser-first web version designed for free static hosting and single-user usage.
 
+Last deploy workflow test trigger: 2026-02-20.
+
 ## What it includes
 
 - Local-first storage in the browser (`localStorage`)
