@@ -619,9 +619,20 @@ function renderSettings(state) {
         <h2>Maintenance</h2>
         <p class="muted">Session timer and data are stored in this browser only.</p>
         <div class="actions">
+          <button type="button" class="button" data-action="settings-export-backup">Export Full Backup</button>
+          <label class="button">
+            Import Full Backup
+            <input
+              type="file"
+              id="settings-import-backup-input"
+              accept="application/json,.json,text/plain"
+              hidden
+            />
+          </label>
           <button type="button" class="button" data-action="settings-clear-session">Clear Active Session</button>
           <button type="button" class="button danger" data-action="settings-reset-all">Reset All Data</button>
         </div>
+        <p class="muted">Full backup includes settings, categories, entries, badges, and active session state.</p>
       </article>
 
       <article class="panel">
@@ -815,6 +826,14 @@ async function handleRootClick(event) {
     return;
   }
 
+  if (action === "settings-export-backup") {
+    const payload = store.exportFullBackup();
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    triggerDownload(`grind-n-chill-full-backup-${stamp}.json`, JSON.stringify(payload, null, 2));
+    setFlash("success", "Full backup exported.");
+    return;
+  }
+
   if (action === "settings-reset-all") {
     const confirmed = window.confirm("Reset all data? This cannot be undone.");
     if (!confirmed) {
@@ -960,6 +979,47 @@ async function handleRootChange(event) {
       );
     } catch (error) {
       setFlash("error", `Import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      target.value = "";
+    }
+  }
+
+  if (target.id === "settings-import-backup-input") {
+    const file = target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const payload = JSON.parse(content);
+
+      const confirmed = window.confirm(
+        "Restore this full backup and replace current local data on this device?"
+      );
+      if (!confirmed) {
+        target.value = "";
+        return;
+      }
+
+      const result = await store.importFullBackup(payload);
+      if (!result.ok) {
+        setFlash("error", result.error);
+        return;
+      }
+
+      uiState.editingCategoryId = null;
+      uiState.manualOnly = false;
+      uiState.sessionNote = "";
+
+      const report = result.report;
+      const sessionNote = report.hasActiveSession ? " active session restored." : " no active session.";
+      setFlash(
+        "success",
+        `Backup restored. categories=${report.categories}, entries=${report.entries}, badges=${report.badges},${sessionNote}`
+      );
+    } catch (error) {
+      setFlash("error", `Backup restore failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       target.value = "";
     }

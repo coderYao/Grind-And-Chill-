@@ -1,5 +1,5 @@
 import { amountUSDForCategory, dailyLedgerSummary, totalBalance } from "./ledger.js";
-import { createDefaultState, normalizeState } from "./schema.js";
+import { CURRENT_SCHEMA_VERSION, createDefaultState, normalizeState } from "./schema.js";
 import {
   badgeLabelFromAward,
   cadencePeriodKey,
@@ -22,6 +22,8 @@ import {
 } from "./utils.js";
 
 const UNIT_VALUES = new Set(["time", "count", "money"]);
+const FULL_BACKUP_TYPE = "grind-n-chill-full-backup";
+const FULL_BACKUP_VERSION = 1;
 
 function categoryKey(title, type, unit) {
   return `${String(title).trim().toLowerCase()}|${type}|${unit}`;
@@ -553,6 +555,42 @@ export class AppStore {
       dateRangeFilter,
       dailySummaries,
       entries: exportEntries,
+    };
+  }
+
+  exportFullBackup() {
+    return {
+      backupType: FULL_BACKUP_TYPE,
+      backupVersion: FULL_BACKUP_VERSION,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      exportedAt: toISOString(),
+      state: this.snapshot(),
+    };
+  }
+
+  async importFullBackup(payload) {
+    if (!payload || typeof payload !== "object") {
+      return { ok: false, error: "Invalid backup file." };
+    }
+
+    if (payload.backupType && payload.backupType !== FULL_BACKUP_TYPE) {
+      return { ok: false, error: "This file is not a Grind N Chill full backup." };
+    }
+
+    const sourceState = payload.state && typeof payload.state === "object" ? payload.state : payload;
+    const restored = normalizeState(sourceState);
+
+    this.state = restored;
+    await this._persistAndEmit();
+
+    return {
+      ok: true,
+      report: {
+        categories: restored.categories.length,
+        entries: restored.entries.length,
+        badges: restored.badgeAwards.length,
+        hasActiveSession: Boolean(restored.activeSession),
+      },
     };
   }
 
