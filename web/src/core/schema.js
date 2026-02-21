@@ -1,17 +1,21 @@
 import { resolveCadence, resolveMilestones } from "./streaks.js";
 import { deepClone } from "./utils.js";
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
+const MAX_RESTORE_POINTS = 3;
 
 export const DEFAULT_STATE = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
   settings: {
     usdPerHour: 18,
+    lastFullBackupAt: null,
+    lastBackupReminderDismissedAt: null,
   },
   categories: [],
   entries: [],
   badgeAwards: [],
   activeSession: null,
+  restorePoints: [],
 };
 
 export function createDefaultState() {
@@ -29,6 +33,31 @@ function asBool(value, fallback = false) {
     return false;
   }
   return fallback;
+}
+
+function normalizeTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return null;
+  }
+
+  return timestamp.toISOString();
+}
+
+function defaultEmojiForType(type) {
+  return type === "quitHabit" ? "🧊" : "💪";
+}
+
+function normalizeEmoji(rawEmoji, type) {
+  const emoji = String(rawEmoji || "").trim();
+  if (!emoji) {
+    return defaultEmojiForType(type);
+  }
+  return emoji.slice(0, 16);
 }
 
 function normalizeCategory(rawCategory) {
@@ -50,6 +79,7 @@ function normalizeCategory(rawCategory) {
   return {
     id,
     title,
+    emoji: normalizeEmoji(rawCategory.emoji, type),
     type,
     unit,
     multiplier: Number.isFinite(Number(rawCategory.multiplier)) ? Number(rawCategory.multiplier) : 1,
@@ -148,6 +178,34 @@ function normalizeSession(rawSession) {
   };
 }
 
+function normalizeRestorePoint(rawPoint) {
+  if (!rawPoint || typeof rawPoint !== "object") {
+    return null;
+  }
+
+  const id = String(rawPoint.id || "").trim();
+  if (!id) {
+    return null;
+  }
+
+  if (!rawPoint.state || typeof rawPoint.state !== "object") {
+    return null;
+  }
+
+  const restoredState = deepClone(rawPoint.state);
+  if (restoredState && typeof restoredState === "object") {
+    restoredState.restorePoints = [];
+  }
+
+  return {
+    id,
+    createdAt: normalizeTimestamp(rawPoint.createdAt) || new Date().toISOString(),
+    reason: String(rawPoint.reason || "Restore point"),
+    summary: String(rawPoint.summary || ""),
+    state: restoredState,
+  };
+}
+
 export function normalizeState(rawState) {
   const base = createDefaultState();
   if (!rawState || typeof rawState !== "object") {
@@ -176,17 +234,28 @@ export function normalizeState(rawState) {
 
   normalizedAwards.sort((a, b) => new Date(b.dateAwarded).getTime() - new Date(a.dateAwarded).getTime());
 
+  const normalizedRestorePoints = Array.isArray(rawState.restorePoints)
+    ? rawState.restorePoints
+        .map(normalizeRestorePoint)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, MAX_RESTORE_POINTS)
+    : [];
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     settings: {
       usdPerHour: Number.isFinite(Number(rawState.settings?.usdPerHour))
         ? Math.max(0.01, Number(rawState.settings.usdPerHour))
         : base.settings.usdPerHour,
+      lastFullBackupAt: normalizeTimestamp(rawState.settings?.lastFullBackupAt),
+      lastBackupReminderDismissedAt: normalizeTimestamp(rawState.settings?.lastBackupReminderDismissedAt),
     },
     categories: normalizedCategories,
     entries: normalizedEntries,
     badgeAwards: normalizedAwards,
     activeSession:
       normalizedSession && categoryIdSet.has(normalizedSession.categoryId) ? normalizedSession : null,
+    restorePoints: normalizedRestorePoints,
   };
 }

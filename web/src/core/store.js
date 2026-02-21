@@ -24,6 +24,9 @@ import {
 const UNIT_VALUES = new Set(["time", "count", "money"]);
 const FULL_BACKUP_TYPE = "grind-n-chill-full-backup";
 const FULL_BACKUP_VERSION = 1;
+const MAX_RESTORE_POINTS = 3;
+const BACKUP_REMINDER_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const BACKUP_REMINDER_SNOOZE_MS = 24 * 60 * 60 * 1000;
 
 function categoryKey(title, type, unit) {
   return `${String(title).trim().toLowerCase()}|${type}|${unit}`;
@@ -39,6 +42,18 @@ function numberString(value) {
 
 function normalizeType(rawType) {
   return rawType === "quitHabit" ? "quitHabit" : "goodHabit";
+}
+
+function defaultEmojiForType(type) {
+  return type === "quitHabit" ? "🧊" : "💪";
+}
+
+function normalizeEmoji(rawEmoji, fallbackType = "goodHabit") {
+  const emoji = String(rawEmoji || "").trim();
+  if (!emoji) {
+    return defaultEmojiForType(normalizeType(fallbackType));
+  }
+  return emoji.slice(0, 16);
 }
 
 function normalizeUnit(rawUnit) {
@@ -78,14 +93,20 @@ function compareAwardsDesc(a, b) {
   return String(b.awardKey).localeCompare(String(a.awardKey));
 }
 
+function restorePointSummary(state) {
+  return `categories=${state.categories.length}, entries=${state.entries.length}, badges=${state.badgeAwards.length}`;
+}
+
 function normalizeCategoryPatchInput(input, fallback) {
   const streakEnabled = asBool(input?.streakEnabled, fallback?.streakEnabled ?? true);
   const badgeEnabledRaw = asBool(input?.badgeEnabled, fallback?.badgeEnabled ?? true);
   const badgeEnabled = streakEnabled ? badgeEnabledRaw : false;
+  const type = normalizeType(input?.type ?? fallback?.type);
 
   return {
     title: String(input?.title ?? fallback?.title ?? "").trim(),
-    type: normalizeType(input?.type ?? fallback?.type),
+    type,
+    emoji: normalizeEmoji(input?.emoji ?? fallback?.emoji, type),
     unit: normalizeUnit(input?.unit ?? fallback?.unit),
     timeConversionMode: normalizeMode(input?.timeConversionMode ?? fallback?.timeConversionMode),
     multiplier: Math.max(0.01, toNumber(input?.multiplier ?? fallback?.multiplier, 1)),
@@ -135,6 +156,81 @@ export class AppStore {
     return this.state.settings.usdPerHour;
   }
 
+  shouldShowBackupReminder(now = Date.now()) {
+    const lastBackupAt = this.state.settings?.lastFullBackupAt
+      ? new Date(this.state.settings.lastFullBackupAt).getTime()
+      : 0;
+    const lastDismissedAt = this.state.settings?.lastBackupReminderDismissedAt
+      ? new Date(this.state.settings.lastBackupReminderDismissedAt).getTime()
+      : 0;
+    const nowMs = new Date(now).getTime();
+
+    if (lastBackupAt && nowMs - lastBackupAt < BACKUP_REMINDER_INTERVAL_MS) {
+      return false;
+    }
+
+    if (lastDismissedAt && nowMs - lastDismissedAt < BACKUP_REMINDER_SNOOZE_MS) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async markFullBackupExported(now = Date.now()) {
+    const timestamp = toISOString(now);
+    this.state.settings.lastFullBackupAt = timestamp;
+    this.state.settings.lastBackupReminderDismissedAt = null;
+    await this._persistAndEmit();
+    return timestamp;
+  }
+
+  async dismissBackupReminder(now = Date.now()) {
+    this.state.settings.lastBackupReminderDismissedAt = toISOString(now);
+    await this._persistAndEmit();
+    return this.state.settings.lastBackupReminderDismissedAt;
+  }
+
+  getRestorePoints() {
+    const points = Array.isArray(this.state.restorePoints) ? this.state.restorePoints : [];
+    return deepClone(points);
+  }
+
+  async restoreFromPoint(pointId) {
+    const existingPoints = Array.isArray(this.state.restorePoints) ? this.state.restorePoints : [];
+    const target = existingPoints.find((point) => point.id === pointId);
+    if (!target) {
+      return { ok: false, error: "Restore point not found." };
+    }
+
+    const beforeRestore = this._buildRestorePoint("Before restore");
+    const restored = normalizeState(target.state);
+    const remainingPoints = existingPoints.filter((point) => point.id !== pointId);
+
+    restored.restorePoints = [beforeRestore, ...remainingPoints].slice(0, MAX_RESTORE_POINTS);
+    this.state = restored;
+    await this._persistAndEmit();
+
+    return {
+      ok: true,
+      report: {
+        categories: restored.categories.length,
+        entries: restored.entries.length,
+        badges: restored.badgeAwards.length,
+      },
+    };
+  }
+
+  async deleteRestorePoint(pointId) {
+    const beforeCount = Array.isArray(this.state.restorePoints) ? this.state.restorePoints.length : 0;
+    this.state.restorePoints = (this.state.restorePoints || []).filter((point) => point.id !== pointId);
+    if (this.state.restorePoints.length === beforeCount) {
+      return { ok: false, error: "Restore point not found." };
+    }
+
+    await this._persistAndEmit();
+    return { ok: true };
+  }
+
   async createCategory(input) {
     const normalized = normalizeCategoryPatchInput(input, {
       title: "",
@@ -160,6 +256,7 @@ export class AppStore {
     const category = {
       id: uuid(),
       title: normalized.title,
+      emoji: normalized.emoji,
       type: normalized.type,
       unit: normalized.unit,
       multiplier: normalized.unit === "time" ? normalized.multiplier : 1,
@@ -198,6 +295,7 @@ export class AppStore {
     }
 
     category.title = normalized.title;
+    category.emoji = normalized.emoji;
     category.type = normalized.type;
     category.unit = normalized.unit;
     category.multiplier = normalized.unit === "time" ? normalized.multiplier : 1;
@@ -221,6 +319,13 @@ export class AppStore {
   }
 
   async deleteCategory(categoryId) {
+    const category = this.state.categories.find((item) => item.id === categoryId);
+    if (!category) {
+      return { ok: false, error: "Category not found." };
+    }
+
+    this._captureRestorePoint(`Before deleting category: ${category.title}`);
+
     const beforeCount = this.state.categories.length;
     this.state.categories = this.state.categories.filter((category) => category.id !== categoryId);
     if (this.state.categories.length === beforeCount) {
@@ -292,6 +397,13 @@ export class AppStore {
   }
 
   async deleteEntry(entryId) {
+    const entry = this.state.entries.find((item) => item.id === entryId);
+    if (!entry) {
+      return { ok: false, error: "Entry not found." };
+    }
+
+    this._captureRestorePoint(`Before deleting entry: ${entry.id.slice(0, 8)}`);
+
     const beforeCount = this.state.entries.length;
     this.state.entries = this.state.entries.filter((entry) => entry.id !== entryId);
     if (this.state.entries.length === beforeCount) {
@@ -435,7 +547,9 @@ export class AppStore {
   }
 
   async resetAllData() {
+    const beforeReset = this._buildRestorePoint("Before reset all data");
     this.state = createDefaultState();
+    this.state.restorePoints = [beforeReset];
     await this._persistAndEmit();
     return { ok: true };
   }
@@ -504,6 +618,7 @@ export class AppStore {
           id: entry.id,
           timestamp: new Date(entry.timestamp).toISOString(),
           categoryTitle: category.title,
+          categoryEmoji: normalizeEmoji(category.emoji, category.type),
           categoryType: category.type,
           unit: entry.unit,
           quantity: numberString(entry.quantity),
@@ -577,8 +692,10 @@ export class AppStore {
       return { ok: false, error: "This file is not a Grind N Chill full backup." };
     }
 
+    const beforeImport = this._buildRestorePoint("Before full backup restore");
     const sourceState = payload.state && typeof payload.state === "object" ? payload.state : payload;
     const restored = normalizeState(sourceState);
+    restored.restorePoints = [beforeImport, ...(restored.restorePoints || [])].slice(0, MAX_RESTORE_POINTS);
 
     this.state = restored;
     await this._persistAndEmit();
@@ -607,6 +724,7 @@ export class AppStore {
     );
 
     const entriesById = new Map(this.state.entries.map((entry) => [entry.id, entry]));
+    const beforeImport = this._buildRestorePoint("Before history import");
 
     let createdEntries = 0;
     let updatedEntries = 0;
@@ -636,6 +754,7 @@ export class AppStore {
         category = {
           id: uuid(),
           title: categoryTitle,
+          emoji: normalizeEmoji(item?.categoryEmoji, categoryType),
           type: categoryType,
           unit,
           multiplier: 1,
@@ -697,6 +816,9 @@ export class AppStore {
 
     this.state.categories.sort((a, b) => a.title.localeCompare(b.title));
     this.state.entries.sort(compareEntriesDesc);
+    if (createdEntries > 0 || updatedEntries > 0 || createdCategories > 0) {
+      this._prependRestorePoint(beforeImport);
+    }
 
     await this._persistAndEmit();
 
@@ -710,6 +832,33 @@ export class AppStore {
         createdCategories,
       },
     };
+  }
+
+  _snapshotForRestorePoint() {
+    const snapshot = this.snapshot();
+    snapshot.restorePoints = [];
+    return snapshot;
+  }
+
+  _buildRestorePoint(reason = "Restore point", now = Date.now()) {
+    return {
+      id: uuid(),
+      createdAt: toISOString(now),
+      reason: String(reason || "Restore point"),
+      summary: restorePointSummary(this.state),
+      state: this._snapshotForRestorePoint(),
+    };
+  }
+
+  _prependRestorePoint(point) {
+    const existing = Array.isArray(this.state.restorePoints) ? this.state.restorePoints : [];
+    this.state.restorePoints = [point, ...existing].slice(0, MAX_RESTORE_POINTS);
+  }
+
+  _captureRestorePoint(reason = "Restore point", now = Date.now()) {
+    const point = this._buildRestorePoint(reason, now);
+    this._prependRestorePoint(point);
+    return point;
   }
 
   _awardBadgesIfNeededForCategory(category, now = Date.now()) {
