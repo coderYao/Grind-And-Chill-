@@ -81,6 +81,10 @@ function getEditingCategory(state) {
   return state.categories.find((category) => category.id === uiState.editingCategoryId) || null;
 }
 
+function categoryTypeLabel(type) {
+  return type === "quitHabit" ? "Chill" : "Grind";
+}
+
 function render() {
   if (!latestState) {
     return;
@@ -200,7 +204,7 @@ function renderDashboard(dashboard) {
         <h2>Streak Highlight</h2>
         ${highlight
           ? `
-            <p><strong>${escapeHtml(highlight.title)}</strong> · ${highlight.type === "goodHabit" ? "Grind" : "Chill"}</p>
+            <p><strong>${escapeHtml(highlight.title)}</strong> · ${categoryTypeLabel(highlight.type)}</p>
             <p class="muted">${escapeHtml(highlight.progressText)}</p>
             <p class="metric">${highlight.streak}${highlight.shortSuffix}</p>
           `
@@ -219,7 +223,7 @@ function renderDashboard(dashboard) {
                   (alert) => `
                     <li>
                       <div>
-                        <p><strong>${escapeHtml(alert.title)}</strong> · ${alert.type === "goodHabit" ? "Grind" : "Chill"}</p>
+                        <p><strong>${escapeHtml(alert.title)}</strong> · ${categoryTypeLabel(alert.type)}</p>
                         <p class="muted">${escapeHtml(alert.message)}</p>
                       </div>
                       <span class="pill ${alert.severity >= 3 ? "pill-danger" : "pill-watch"}">${alert.severity >= 3 ? "High" : "Watch"}</span>
@@ -421,8 +425,8 @@ function renderCategories(state, editingCategory) {
             <label class="field">
               <span>Type</span>
               <select name="type">
-                <option value="goodHabit" ${formData.type === "goodHabit" ? "selected" : ""}>Good Habit</option>
-                <option value="quitHabit" ${formData.type === "quitHabit" ? "selected" : ""}>Quit Habit</option>
+                <option value="goodHabit" ${formData.type === "goodHabit" ? "selected" : ""}>Grind</option>
+                <option value="quitHabit" ${formData.type === "quitHabit" ? "selected" : ""}>Chill</option>
               </select>
             </label>
 
@@ -523,7 +527,7 @@ function renderCategories(state, editingCategory) {
                     <li>
                       <div>
                         <p><strong>${escapeHtml(category.title)}</strong></p>
-                        <p class="muted">${category.type} · ${category.unit} · ${category.streakCadence || "daily"} cadence · goal ${toNumber(
+                        <p class="muted">${categoryTypeLabel(category.type)} · ${category.unit} · ${category.streakCadence || "daily"} cadence · goal ${toNumber(
                           category.dailyGoalValue,
                           0
                         )}</p>
